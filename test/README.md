@@ -64,3 +64,36 @@ The constructor is intentionally markes with the `explicit` keyword to avoid any
 
 Additionally, except for the multiplication and division, _all_ other operations, assignments and comparisons between `Meter` and `CentiMeter` types will produce a compilation error.
 
+## Higher dimensions
+
+Let's say that our program needs to handle not only length in different scales, but also the surface.
+
+We can introduce a new type:
+```C++
+using MeterSquared = units::PhysicalUnit<int, std::ratio<1>, std::ratio<2>>;
+```
+We see that the dimension parameter has changed from one to two, representing $m^2$.
+
+We could now write a code like this:
+```C++
+Meter a(3), b(6);
+MeterSquared c = a * b; // c has the value 18
+int d = b / a; // d has the value 2
+if ((c / a) == b) {} // the condition would be true
+```
+Notes on the multiplication and division operations:
+- the resulting holding type is decided by C++ type deduction rules
+- the conversion factors are multiplied or divided, depending on the operation
+- all unit dimensions are added or subtracted, depending on the operation
+
+Additionally, if the arithmetic operations yield a dimensionless physical unit (i.e. the one where all the dimension exponents are zero), a special `operator T()` allows us to simply extract the value, multiplied by its conversion factor.
+
+The predictability of the arithmetic operations allows us to:
+- create new types on the fly
+- have a known resulting type in the compile time
+- avoid common errors that can occur with complex calculations that involve values with different dimensions and/or conversion factors
+
+Some common resulting types, as examples:
+- if we divide meters by seconds, we will get $\frac{m}{s}$, or speed
+- if we multiple speed by seconds (or some other time interval type), we will get the total distance as length
+- if we divide a scalar by seconds we will get $\frac{1}{s}$ or simply _Hz_
