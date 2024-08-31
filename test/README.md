@@ -85,6 +85,7 @@ Notes on the multiplication and division operations:
 - the resulting holding type is decided by C++ type deduction rules
 - the conversion factors are multiplied or divided, depending on the operation
 - all unit dimensions are added or subtracted, depending on the operation
+- since `std::ratio` is being used for conversion factor and dimensions, **all** type calculations are done in the compile time, with no runtime overhead
 
 Additionally, if the arithmetic operations yield a dimensionless physical unit (i.e. the one where all the dimension exponents are zero), a special `operator T()` allows us to simply extract the value, multiplied by its conversion factor.
 
@@ -97,3 +98,41 @@ Some common resulting types, as examples:
 - if we divide meters by seconds, we will get $\frac{m}{s}$, or speed
 - if we multiple speed by seconds (or some other time interval type), we will get the total distance as length
 - if we divide a scalar by seconds we will get $\frac{1}{s}$ or simply _Hz_
+
+## Absolute units
+
+Absolute units have a similar template signature to the physical units, with some notable additions:
+- diff type, to be used as a holding type for the resulting difference physical unit (more about this later)
+- offset from the SI zero, mostly used for the tempareture scales (e.g. Celsius, Fahernheit, etc.)
+
+Two common examples of the need for the absolute units are temperature and time. In case of time, we would draw two parallels:
+- between the point in time and the absolute unit
+- between the time interval and the ordinary physical unit.
+
+In case of temperature, we would do similarly:
+- between the measured temperature and the absolute unit
+- between the temperature interval and the ordinary physical unit.
+
+Let's also take a look at some operational differences between the absolute and common physical units:
+- absolute units cannot be multiplied nor divided (e.g. it doesn't make much sense to divide _now_ as a timestamp)
+- absolute units can be subtracted, thus yielding a differetial type: `now - yesteday == 24h`
+- differential unit type can be added or subtracted from its absolute unit, thus yielding the same absolute unit type: `now + 7d == a_week_from_now`
+
+As an example, let's convert between Kelvins and Fahrenheits:
+```C++
+using TempKelvin =
+    units::AbsolutePhysicalUnit<double, std::ratio<1>, double, std::ratio<0>,
+                                std::ratio<0>, std::ratio<0>, std::ratio<0>,
+                                std::ratio<0>, std::ratio<1>>;
+using TempFahrenheit = units::AbsolutePhysicalUnit<
+    double, std::ratio<5, 9>, double, std::ratio<229835, 900>, std::ratio<0>,
+    std::ratio<0>, std::ratio<0>, std::ratio<0>, std::ratio<1>>;
+```
+Some notes on the template signatures:
+- both will use `double` for both the holding and the difference type
+- as Kelvin is the SI unit, the conversion factor will be one, but it will be $\frac{5}{9}$ for Fahrenheit
+- similarly, the offset for Kelvin is zero, but it is $\frac{229835}{900}$ for Fahrenheit
+
+If we perform zero testing (i.e. checking the value of zero from one temperature unit to another), we will easily see that:
+- 0K = -459.67F
+- 0F = 255.37K
