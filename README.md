@@ -18,7 +18,7 @@ I started developing an embedded-focused C++ template library to solve our proje
 problems, and what began as an experiment ended up as a nice and useful exercise in C++.
 I hope that it might come in handy to others as well.
 
-Link to the [https://www.youtube.com/watch?v=h7J8SMWG2Hw](recording) where I
+Link to the [recording](https://www.youtube.com/watch?v=h7J8SMWG2Hw) where I
 presented the original version of the solution.
 
 ## Basic design of the library
