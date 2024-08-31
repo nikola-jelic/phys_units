@@ -36,6 +36,8 @@ Absolute physical units also have:
 - differential type; the underlying type for the physical unit used as an interval difference
 - offset; mostly used for temperature conversions between Kelvin, Celsius and Fahrenheit
 
+Check the [examples](test/README.md) for more details on how to use the library in the code.
+
 ## Time
 
 The `phys_chrono.hpp` header offers two useful converters between the `units::PhysicalUnit`
