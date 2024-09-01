@@ -23,6 +23,11 @@ presented the original version of the solution.
 
 ## Basic design of the library
 
+Given its embedded focus, the foundational design decisions for the library are:
+- C++11 standard, given its wide spread; as a side note, I haven't seen that many embedded projects that use anything more modern than C++14
+- Favour integral types over floating points whenever possible; speed and predictability are strong decision drivers in the embedded world
+- Minimal runtime overhead; everything that can be done in the compile time should be done there
+
 The main header of the library is `phys_units.hpp`, which defines two main template classes:
 - PhysicalUnit, for all common use cases
 - AbsolutePhysicalUnit, mostly for time and temperature
@@ -35,6 +40,8 @@ All physical unit values have:
 Absolute physical units also have:
 - differential type; the underlying type for the physical unit used as an interval difference
 - offset; mostly used for temperature conversions between Kelvin, Celsius and Fahrenheit
+
+Check the [examples](test/README.md) for more details on how to use the library in the code.
 
 ## Time
 

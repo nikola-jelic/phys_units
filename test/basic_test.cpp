@@ -44,6 +44,7 @@ TEST(PhysUnitsTests, ComplexConversions) {
   Meter a(3), b(6);
   MeterSquared c = a * b;
   EXPECT_EQ(c.value(), 18);
+  EXPECT_EQ((c / a), b);
   EXPECT_EQ((b / a), 2);
   EXPECT_EQ((b / 2).value(), 3);
   Seconds s(20);
