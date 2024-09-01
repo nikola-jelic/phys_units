@@ -136,3 +136,68 @@ Some notes on the template signatures:
 If we perform zero testing (i.e. checking the value of zero from one temperature unit to another), we will easily see that:
 - 0K = -459.67F
 - 0F = 255.37K
+
+## Basic mathematical helper functions
+
+It would be impossible to provide all the math functions from the standard library, but I've picked a few that were handy for me:
+- abs; absolute value
+- sqrt; square root
+- cbrt; cubic root
+
+Absolute value implementation is trivial and it won't be covered here.
+
+The implementation of the root functions is more interesting and must be elaborated:
+- for the holding value, we simply apply the root function
+- for the dimensions, we divide them by the root exponent (i.e. divide by two for square root, etc.)
+- for the conversion factor, we would like to apply the root function, but the ratio is a compile time type, so this is not an option
+
+My solution is rather lazy, but effective - I have introduced a template structure that calculates the root (square or cubic) of a number in the compile time, but only for the commonly used values. **Note**: if your code needs some atypical value to be rooted, you can easily provide a template specialisation for that number.
+
+Some example code for the template square structure:
+```C++
+template <intmax_t Number> struct num_sqrt {};
+
+template <> struct num_sqrt<0> {
+  static const intmax_t value = 0;
+};
+
+template <> struct num_sqrt<1> {
+  static const intmax_t value = 1;
+};
+
+template <> struct num_sqrt<100> {
+  static const intmax_t value = 10;
+};
+
+template <> struct num_sqrt<360> {
+  static const intmax_t value = 60;
+};
+```
+
+## Complex numbers as the holding types
+
+The library will accept the complex types for holding values, but all other restrictions for the complex numbers apply. For example, complex numbers cannot be compared, aside from equality.
+
+## Angles
+
+Angles are not SI units, but they are very useful in the daily life of the embedded engineer, so I ended up introducing them as a special unit, both common and the absolute.
+
+For the common unit, the eight dimension was added and that was it. As the base measurement unit for the angles, I chose the degree, as it offers excellent integral scaling and effectively better precision than the floating point types. The conversion factors for the radians and for the full circle units (i.e. effectively conversion factor of 360) are provided.
+
+The absolute type for the angle is effectively a direction and it shares many of the constraints of other absolute units:
+- it makes no sense to multiply or divide a direction, but it makes sense for the angle
+- angle can be used as the interval value and the direction for the actual data point
+
+There is one additional peculiarity for the absolute angles:
+- the value can be normalised to either [0, N) or to [-N/2, N/2)
+- the solution was to introduce a template argument which enforses the correct behaviour
+
+### Trigonometry
+
+All trigonometry functions provided by the standard library expect or provide values in radians, which posed a challenge to the library's design.
+
+I ended up creating some helper macros for the two (or three) types of functions from the standard library:
+- functions that expect radians (e.g. `sin`) are overloaded to convert any angle type to the radian variant and then call the library function
+- functions that return radians (e.g. `asin`) are overloaded to accept a target angle type and convert the radians to the expected type
+- the faux third type is only for the `atan2` function, as it takes two arguments instead of one, but it otherwise behaves like other inverse functions from the previous point
+
