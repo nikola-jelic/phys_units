@@ -16,4 +16,4 @@ cd build
 
 cmake .. -DCMAKE_INSTALL_PREFIX=/usr
 
-sudo cmake --install .
+cmake --install .
