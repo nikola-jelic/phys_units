@@ -19,8 +19,11 @@ include(GNUInstallDirs)
 # Install the library interface (mostly for CMake package)
 install(TARGETS phys_units EXPORT phys_units)
 
-# Install header files
-install(DIRECTORY inc/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+# Install only .hpp files
+install(DIRECTORY inc/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.hpp"
+)
 
 install(EXPORT phys_units
         FILE phys_units_config.cmake
