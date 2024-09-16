@@ -62,3 +62,12 @@ AbsoluteAngle class offers a functionality similar to the AbsolutePhysicalUnit, 
 - AbsoluteAngle can only have values within the given interval
 - As with the AbsolutePhysicalUnit, AbsoluteAngle supports addition and subtraction, but not multiplication
 and division
+
+## Install
+
+Run `install.sh` script from `scripts/` folder. Before running `install.sh` script add executable permissions to it
+using `chmod +x install.sh`.
+
+If you would like to change install path update variable `-DCMAKE_INSTALL_PREFIX=/desired_path` with desired path.
+By default it will install library in `/usr/include/` folder.
+
