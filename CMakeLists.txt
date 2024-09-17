@@ -16,8 +16,11 @@ target_compile_features(phys_units INTERFACE cxx_std_11)
 # Use `GNUInstallDirs` to handle standard install directories
 include(GNUInstallDirs)
 
-# Install the library interface (mostly for CMake package)
-install(TARGETS phys_units EXPORT phys_units)
+# Install only .hpp files
+install(DIRECTORY inc/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.hpp"
+)
 
 # Install header files
 install(DIRECTORY inc/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
