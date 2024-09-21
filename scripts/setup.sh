@@ -8,24 +8,26 @@ UNINSTALL=false
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 [-p install_path] [-u]"
-    echo "  -p install_path  Specify installation path (default: /usr)"
-    echo "  -u               Uninstall the project"
+    echo "Usage: $0 [-p install_path] [--path install_path] [-u] [--uninstall]"
+    echo "  -p, --path install_path   Specify installation path (default: /usr)"
+    echo "  -u, --uninstall           Uninstall the project"
     exit 1
 }
 
 # Parse command-line options
-while getopts "p:u" opt; do
-    case ${opt} in
-        p )
-            INSTALL_PATH=$OPTARG
-            ;;
-        u )
-            UNINSTALL=true
-            ;;
-        \?)
-            usage
-            ;;
+TEMP=`getopt -o p:u --long path:,uninstall -- "$@"`
+if [ $? != 0 ] ; then usage ; exit 1; fi
+
+eval set -- "$TEMP"
+
+while true ; do
+    case "$1" in
+        -p|--path)
+            INSTALL_PATH=$2 ; shift 2 ;;
+        -u|--uninstall)
+            UNINSTALL=true ; shift ;;
+        --) shift ; break ;;
+        *) usage;;
     esac
 done
 
