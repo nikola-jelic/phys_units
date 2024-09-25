@@ -65,9 +65,46 @@ and division
 
 ## Install
 
-Run `install.sh` script from `scripts/` folder. Before running `install.sh` script add executable permissions to it
-using `chmod +x install.sh`.
+### Bash
 
-If you would like to change install path update variable `-DCMAKE_INSTALL_PREFIX=/desired_path` with desired path.
-By default it will install library in `/usr/include/` folder.
+Install library using `setup.sh` script.
 
+#### Build and install with default path (/usr/include/) 
+`./setup.sh install`
+
+#### Uninstall with default path
+`./setup/sh uninstall`
+
+#### Build and install with custom path
+`./setup.sh path=/custom_path install`
+
+#### Uninstall with custom path
+`./setup.sh path=/custom_path uninstall`
+
+
+### CMake
+
+#### Create build folder and navigate to it.
+```
+mkdir build
+cd build
+```
+
+Command bellow is optional and used to specify custom install path.
+
+`cmake .. -DCMAKE_INSTALL_PREFIX=/install_path`
+
+#### Build and install project
+```
+cmake --build .
+cmake --install .
+```
+
+#### Uninstall library
+`cmake --build . --target uninstall` 
+
+or
+
+`xargs rm < install_manifest.txt`
+
+*Note: These commands needs to be run from build folder.*
