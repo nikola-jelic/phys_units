@@ -45,7 +45,7 @@ public:
                          AmmDim, LumDim, AngleDim> &val) {
     using outRatio = std::ratio_divide<F, Factor>;
     m_value = decltype(val.value() * m_value)(val.value()) * outRatio::num /
-             outRatio::den;
+              outRatio::den;
   }
 
   template <typename V>
@@ -257,7 +257,7 @@ public:
     using outOffset = std::ratio_divide<std::ratio_subtract<O, Offset>, Factor>;
     using tmpType = decltype(val.value() * m_value);
     m_value = tmpType(val.value()) * outRatio::num / outRatio::den +
-             tmpType(outOffset::num) / outOffset::den;
+              tmpType(outOffset::num) / outOffset::den;
   }
 
   template <typename V>
@@ -280,7 +280,7 @@ public:
   }
 
   AbsolutePhysicalUnit const &operator++() {
-    m_value ++;
+    m_value++;
     return *this;
   }
 

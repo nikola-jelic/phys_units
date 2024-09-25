@@ -139,4 +139,3 @@ TEST(CommonAngleTests, AngleNormalisationNegativeHalfIntervalFloat) {
   shared = units::AbsoluteAngle<double>(-270);
   EXPECT_EQ(shared.value(), 90);
 }
-
