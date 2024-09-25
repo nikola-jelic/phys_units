@@ -1,4 +1,5 @@
-name: CI
+name: Compile Test CI
+run-name: ${{ github.actor }} is testing out different compilers and C++ standards
 
 on: [push, merge, pull_request]
 
