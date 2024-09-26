@@ -1,10 +1,10 @@
 name: Compile Test CI
-run-name: ${{ github.actor }} is testing out different compilers and C++ standards
+run-name: Testing out different compilers and C++ standards
 
 on: [push]
 
 jobs:
-  build:
+  compile:
 
     runs-on: ubuntu-latest
 
