@@ -17,5 +17,8 @@ endif()
 # Add compile options
 add_compile_options(-Wall -Werror)
 
+# Specify the include directories
+include_directories(${CMAKE_SOURCE_DIR}/../../inc)
+
 # Add an executable for testing
 add_executable(test_program test_program.cpp)
