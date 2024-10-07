@@ -1,0 +1,21 @@
+name: Compile Test CI
+run-name: Testing out different compilers and C++ standards
+
+on: [push]
+
+jobs:
+  compile:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc g++ clang cmake
+
+    - name: Run Compile Test Script
+      run: ./scripts/build/compile_test.sh
