@@ -40,7 +40,7 @@ public:
   PhysicalUnit() : m_value(0) {}
   template <typename V, typename F>
   /* converting constructor */
-  explicit PhysicalUnit(
+  constexpr explicit PhysicalUnit(
       const PhysicalUnit<V, F, LenDim, MassDim, TimeDim, ElcurDim, TempDim,
                          AmmDim, LumDim, AngleDim> &val) {
     using outRatio = std::ratio_divide<F, Factor>;
@@ -226,7 +226,7 @@ operator%(const PhysicalUnit<V, Ts...> &lhs,
 }
 
 template <typename ToType, typename... Ts>
-ToType unit_cast(const PhysicalUnit<Ts...> &fromType) {
+constexpr ToType unit_cast(const PhysicalUnit<Ts...> &fromType) {
   return ToType(fromType);
 }
 

@@ -53,8 +53,8 @@ public:
   template <typename V, typename F, bool H>
   explicit AbsoluteAngle(const AbsoluteAngle<V, F, H> &val) {
     using outRatio = std::ratio_divide<F, Factor>;
-    setValue(normaliseAngle(decltype(val.value() * m_value)(val.value()) *
-                            outRatio::num / outRatio::den));
+    setValue(decltype(val.value() * m_value)(val.value()) * outRatio::num /
+             outRatio::den);
   }
   template <typename V, bool H>
   AbsoluteAngle const &operator=(const AbsoluteAngle<V, Factor, H> &val) {
