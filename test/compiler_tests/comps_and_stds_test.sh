@@ -5,8 +5,13 @@
 COMPILERS=("g++" "clang++")
 STANDARDS=("11" "14" "17" "20" "23")
 
-# Set project root
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+COMPILER_TESTS="${PROJECT_ROOT}/test/compiler_tests"
+TEMP_BUILD_DIR="${COMPILER_TESTS}/build"
+LOG_DIR="${COMPILER_TESTS}/logs"
+MD_OUTPUT="${COMPILER_TESTS}/results.md"
+
+declare -A RESULTS
 
 function print_matrix_header()
 {
@@ -46,27 +51,26 @@ function print_results()
 
 function export_markdown()
 {
-    local md_file="${COMPILER_TESTS}/compile_results.md"
-    : > "$md_file" # Clear previous content
+    : > "${MD_OUTPUT}"
 
     # Header row
-    printf "| %-8s " "Compiler" >> "$md_file"
+    printf "| %-8s " "Compiler" >> "${MD_OUTPUT}"
     for STD in "${STANDARDS[@]}"; do
-        printf "| %-5s " "C++$STD" >> "$md_file"
+        printf "| %-5s " "C++$STD" >> "${MD_OUTPUT}"
     done
-    echo "|" >> "$md_file"
+    echo "|" >> "${MD_OUTPUT}"
 
     # Separator row
-    printf "|%s" "----------" >> "$md_file"
+    printf "|%s" "----------" >> "${MD_OUTPUT}"
     for STD in "${STANDARDS[@]}"; do
-        printf "|%s" "-------" >> "$md_file"
+        printf "|%s" "-------" >> "${MD_OUTPUT}"
     done
-    echo "|" >> "$md_file"
+    echo "|" >> "${MD_OUTPUT}"
 
     # Data rows with symbols centered
     COL_WIDTH=6 # Define column width for result symbols
     for COMPILER in "${COMPILERS[@]}"; do
-        printf "| %-8s " "$COMPILER" >> "$md_file"
+        printf "| %-8s " "$COMPILER" >> "${MD_OUTPUT}"
         for STD in "${STANDARDS[@]}"; do
             KEY="${COMPILER}_C++${STD}"
             RESULT="${RESULTS[$KEY]}"
@@ -75,76 +79,73 @@ function export_markdown()
             else
                 SYMBOL="❌"
             fi
-            printf "| %-*s " $COL_WIDTH "$SYMBOL" >> "$md_file"
+            printf "| %-*s " $COL_WIDTH "$SYMBOL" >> "${MD_OUTPUT}"
         done
-        echo "|" >> "$md_file"
+        echo "|" >> "${MD_OUTPUT}"
     done
 
-    echo "Markdown table exported to: $md_file"
+    echo "Markdown table exported to: ${MD_OUTPUT}"
 }
 
-# Navigate to project root
-cd "$PROJECT_ROOT" || {
-    echo "Failed to navigate to project root"
-    exit 1
-}
+function run_compilation_matrix()
+{
+    mkdir -p "${TEMP_BUILD_DIR}" "${LOG_DIR}"
 
-# Set build directory in scripts and navigate to it
-COMPILER_TESTS="${PROJECT_ROOT}/test/compiler_tests"
-cd "$COMPILER_TESTS" || {
-    echo "Failed to navigate to compiler_tests folder"
-    exit 1
-}
+    # Loop through compilers and standards
+    for COMPILER in "${COMPILERS[@]}"; do
+        for STANDARD in "${STANDARDS[@]}"; do
+            echo "Compiling with $COMPILER and C++ standard $STANDARD..."
 
-# Create build directory if it doesn't exist
-TEMP_BUILD_DIR="${COMPILER_TESTS}/build"
-mkdir -p "$TEMP_BUILD_DIR"
+            # Set environment variable
+            export CXX_COMPILER=$COMPILER
+            export CXX_STANDARD=$STANDARD
 
-declare -A RESULTS
+            # Configure and build project
+            cd "$TEMP_BUILD_DIR" || {
+                echo "Failed to navigate to build directory"
+                exit 1
+            }
+            cmake -D CMAKE_CXX_STANDARD="${CXX_STANDARD}" -D CMAKE_CXX_COMPILER="${CXX_COMPILER}" ..
 
-# Loop through compilers and standards
-for COMPILER in "${COMPILERS[@]}"; do
-    for STANDARD in "${STANDARDS[@]}"; do
-        echo "Compiling with $COMPILER and C++ standard $STANDARD..."
+            BUILD_OUTPUT=$(cmake --build . --target test_program 2>&1)
+            BUILD_EXIT_CODE=$?
 
-        # Set environment variable
-        export CXX_COMPILER=$COMPILER
-        export CXX_STANDARD=$STANDARD
+            KEY="${COMPILER}_C++${STANDARD}"
+            LOG_FILE="${LOG_DIR}/${KEY}.log"
+            echo "$BUILD_OUTPUT" > "$LOG_FILE"
 
-        # Configure and build project
-        cd "$TEMP_BUILD_DIR" || {
-            echo "Failed to navigate to build directory"
-            exit 1
-        }
-        cmake -D CMAKE_CXX_STANDARD="${CXX_STANDARD}" -D CMAKE_CXX_COMPILER="${CXX_COMPILER}" ..
+            if [ $BUILD_EXIT_CODE -ne 0 ]; then
+                RESULTS["$KEY"]="FAIL"
+            else
+                RESULTS["$KEY"]="PASS"
+            fi
 
-        BUILD_OUTPUT=$(cmake --build . --target test_program 2>&1)
-        BUILD_EXIT_CODE=$?
-
-        KEY="${COMPILER}_C++${STANDARD}"
-        if [ $BUILD_EXIT_CODE -ne 0 ]; then
-            # echo "Compilation failed with $COMPILER and C++$STANDARD standard"
-            # echo "${BUILD_OUTPUT}"
-            # cd ..
-            # continue
-            RESULTS["$KEY"]="FAIL"
-        else
-            # echo "Compilation succeeded with $COMPILER and C++$STANDARD standard"
-            # echo "${BUILD_OUTPUT}"
-            RESULTS["$KEY"]="PASS"
-        fi
-
-        # Clean up build artifacts and leave temporary build folder
-        rm -f test_program
-        cd ..
+            # Clean up build artifacts and leave temporary build folder
+            rm -f test_program
+            cd "$COMPILER_TESTS" || exit 1
+        done
     done
-done
 
-# Clean up the build directory
-rm -rf "${TEMP_BUILD_DIR}"
+    # Clean up the build directory
+    rm -rf "${TEMP_BUILD_DIR}"
+}
 
-print_matrix_header
-print_results
-export_markdown
+function main()
+{
+    cd "$PROJECT_ROOT" || {
+        echo "Failed to navigate to project root"
+        exit 1
+    }
 
-exit 0
+    cd "$COMPILER_TESTS" || {
+        echo "Failed to navigate to compiler_tests folder"
+        exit 1
+    }
+
+    run_compilation_matrix
+    print_matrix_header
+    print_results
+    export_markdown
+}
+
+main "$@"
