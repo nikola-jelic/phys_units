@@ -108,3 +108,13 @@ or
 `xargs rm < install_manifest.txt`
 
 *Note: These commands needs to be run from build folder.*
+
+## Compilers and C++ standards matrix
+<!-- compiler-matrix-start -->
+
+| Compiler | C++11 | C++14 | C++17 | C++20 | C++23 |
+|----------|-------|-------|-------|-------|-------|
+| g++      | ❌    | ✅    | ✅    | ✅    | ✅    |
+| clang++  | ❌    | ❌    | ❌    | ❌    | ❌    |
+
+<!-- compiler-matrix-end -->

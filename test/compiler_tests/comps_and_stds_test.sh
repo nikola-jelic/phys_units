@@ -9,7 +9,6 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPILER_TESTS="${PROJECT_ROOT}/test/compiler_tests"
 TEMP_BUILD_DIR="${COMPILER_TESTS}/build"
 LOG_DIR="${COMPILER_TESTS}/logs"
-MD_OUTPUT="${COMPILER_TESTS}/results.md"
 
 declare -A RESULTS
 
@@ -51,40 +50,55 @@ function print_results()
 
 function export_markdown()
 {
-    : > "${MD_OUTPUT}"
+    local md_file="${PROJECT_ROOT}/README.md"
+    local temp_file="${md_file}.tmp"
+    local start_marker="<!-- compiler-matrix-start -->"
+    local end_marker="<!-- compiler-matrix-end -->"
 
-    # Header row
-    printf "| %-8s " "Compiler" >> "${MD_OUTPUT}"
-    for STD in "${STANDARDS[@]}"; do
-        printf "| %-5s " "C++$STD" >> "${MD_OUTPUT}"
-    done
-    echo "|" >> "${MD_OUTPUT}"
-
-    # Separator row
-    printf "|%s" "----------" >> "${MD_OUTPUT}"
-    for STD in "${STANDARDS[@]}"; do
-        printf "|%s" "-------" >> "${MD_OUTPUT}"
-    done
-    echo "|" >> "${MD_OUTPUT}"
-
-    # Data rows with symbols centered
-    COL_WIDTH=6 # Define column width for result symbols
-    for COMPILER in "${COMPILERS[@]}"; do
-        printf "| %-8s " "$COMPILER" >> "${MD_OUTPUT}"
+    {
+        echo "$start_marker"
+        echo ""
+        printf "| %-8s " "Compiler"
         for STD in "${STANDARDS[@]}"; do
-            KEY="${COMPILER}_C++${STD}"
-            RESULT="${RESULTS[$KEY]}"
-            if [[ "$RESULT" == "PASS" ]]; then
-                SYMBOL="✅"
-            else
-                SYMBOL="❌"
-            fi
-            printf "| %-*s " $COL_WIDTH "$SYMBOL" >> "${MD_OUTPUT}"
+            printf "| %-5s " "C++$STD"
         done
-        echo "|" >> "${MD_OUTPUT}"
-    done
+        echo "|"
 
-    echo "Markdown table exported to: ${MD_OUTPUT}"
+        printf "|%s" "----------"
+        for _ in "${STANDARDS[@]}"; do
+            printf "|%s" "-------"
+        done
+        echo "|"
+
+        COL_WIDTH=6
+        for COMPILER in "${COMPILERS[@]}"; do
+            printf "| %-8s " "$COMPILER"
+            for STD in "${STANDARDS[@]}"; do
+                local KEY="${COMPILER}_C++${STD}"
+                local RESULT="${RESULTS[$KEY]}"
+                local SYMBOL="❌"
+                [[ "$RESULT" == "PASS" ]] && SYMBOL="✅"
+                printf "| %-*s " $COL_WIDTH "$SYMBOL"
+            done
+            echo "|"
+        done
+        echo ""
+        echo "$end_marker"
+    } > "$temp_file"
+
+    # Replace the block in README.md
+    awk -v start="$start_marker" -v end="$end_marker" \
+        -v new="$(cat < "$temp_file" | sed 's/[/]/\\\//g')" \
+        'BEGIN{found=0}
+         {
+           if ($0 ~ start) {print new; found=1; skip=1; next}
+           if ($0 ~ end) {skip=0; next}
+           if (!skip) print
+         }' "${md_file}" > "${md_file}.new"
+
+    mv "${md_file}.new" "${md_file}"
+    rm -f "${temp_file}"
+    echo "README.md updated with compiler matrix"
 }
 
 function run_compilation_matrix()
@@ -130,6 +144,26 @@ function run_compilation_matrix()
     rm -rf "${TEMP_BUILD_DIR}"
 }
 
+print_failed_logs()
+{
+    echo ""
+    echo "=== 🔍 Failed Build Logs ==="
+
+    for COMPILER in "${COMPILERS[@]}"; do
+        for STD in "${STANDARDS[@]}"; do
+            KEY="${COMPILER}_C++${STD}"
+            RESULT="${RESULTS[$KEY]}"
+
+            if [[ "$RESULT" == "FAIL" ]]; then
+                LOG_FILE="${LOG_DIR}/${KEY}.log"
+                echo ""
+                echo "----- 💥 Log: $KEY -----"
+                cat "$LOG_FILE"
+            fi
+        done
+    done
+}
+
 function main()
 {
     cd "$PROJECT_ROOT" || {
@@ -146,6 +180,7 @@ function main()
     print_matrix_header
     print_results
     export_markdown
+    print_failed_logs
 }
 
 main "$@"
