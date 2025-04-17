@@ -10,7 +10,7 @@ target_include_directories(phys_units INTERFACE
   $<INSTALL_INTERFACE:inc>)
 
 # C++ standard (optional)
-target_compile_features(phys_units INTERFACE cxx_std_20)
+target_compile_features(phys_units INTERFACE cxx_std_11)
 
 # Use `GNUInstallDirs` to handle standard install directories
 include(GNUInstallDirs)
