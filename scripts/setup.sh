@@ -8,7 +8,8 @@ INSTALL=false
 UNINSTALL=false
 
 # Function to display usage
-usage() {
+usage()
+{
     echo "Usage: $0 [path=install_path] [install] [uninstall]"
     echo "  path=install_path   Specify installation path (default: /usr)"
     echo "  install             Install the project"
@@ -19,21 +20,21 @@ usage() {
 # Parse key-valude pair options
 for ARG in "$@"; do
     case $ARG in
-    path=*)
-        INSTALL_PATH="${ARG#*=}"
-        shift
-        ;;
-    install)
-        INSTALL=true
-        shift
-        ;;
-    uninstall)
-        UNINSTALL=true
-        shift
-        ;;
-    *)
-        usage
-        ;;
+        path=*)
+            INSTALL_PATH="${ARG#*=}"
+            shift
+            ;;
+        install)
+            INSTALL=true
+            shift
+            ;;
+        uninstall)
+            UNINSTALL=true
+            shift
+            ;;
+        *)
+            usage
+            ;;
     esac
 done
 

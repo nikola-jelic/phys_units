@@ -1,0 +1,42 @@
+name: CI - Build and Export Compiler Matrix
+run-name: Testing out different compilers and C++ standards
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  compile:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc g++ clang cmake
+
+    - name: Run Compile Test Script
+      run: |
+          chmod +x ./test/compiler_tests/comps_and_stds_test.sh
+          ./test/compiler_tests/comps_and_stds_test.sh
+
+    - name: Commit and push updated README.md
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+        if [[ -n $(git status --porcelain README.md) ]]; then
+          git add README.md
+          git commit -m "📊 Update compiler matrix in README.md"
+          git push
+        else
+          echo "No changes to README.md, skipping commit."
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
