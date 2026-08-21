@@ -1,0 +1,9 @@
+# The project has always been formatted with clang-format's LLVM defaults;
+# this file pins that explicitly so the result does not drift between
+# clang-format versions or depend on a config file further up the tree.
+BasedOnStyle: LLVM
+
+# Anchored deliberately rather than inherited: the standard matters for how
+# nested template closers are formatted, and this library targets C++11.
+Standard: c++11
+ColumnLimit: 80

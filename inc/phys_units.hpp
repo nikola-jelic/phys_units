@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Nikola Jelic <nikola.jelic83@gmail.com>
+Copyright 2024-2026 Nikola Jelić <nikola.jelic83@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the “Software”), to deal in
@@ -22,9 +22,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #pragma once
 
 #include <cmath>
+#include <cstdlib>
 #include <ratio>
+#include <type_traits>
+#include <utility>
 
 namespace units {
+
+namespace detail {
+/* Result type of an arithmetic operation between A and B, following the usual
+   promotion rules. Used to keep the converting constructors constexpr under
+   C++11, where the constructor body must be empty. */
+template <typename A, typename B>
+using ArithResult = decltype(std::declval<A>() * std::declval<B>());
+} // namespace detail
 
 template <typename ValType, typename Factor = std::ratio<1>,
           typename LenDim = std::ratio<0>, typename MassDim = std::ratio<0>,
@@ -37,16 +48,17 @@ public:
   using ConvFactor = Factor;
   constexpr explicit PhysicalUnit(ValType initialValue)
       : m_value(initialValue) {}
-  PhysicalUnit() : m_value(0) {}
-  template <typename V, typename F>
+  constexpr PhysicalUnit() : m_value(0) {}
+
   /* converting constructor */
+  template <typename V, typename F>
   constexpr explicit PhysicalUnit(
       const PhysicalUnit<V, F, LenDim, MassDim, TimeDim, ElcurDim, TempDim,
-                         AmmDim, LumDim, AngleDim> &val) {
-    using outRatio = std::ratio_divide<F, Factor>;
-    m_value = decltype(val.value() * m_value)(val.value()) * outRatio::num /
-              outRatio::den;
-  }
+                         AmmDim, LumDim, AngleDim> &val)
+      : m_value(static_cast<ValType>(
+            static_cast<detail::ArithResult<V, ValType>>(val.value()) *
+            std::ratio_divide<F, Factor>::num /
+            std::ratio_divide<F, Factor>::den)) {}
 
   template <typename V>
   PhysicalUnit const &
@@ -86,23 +98,65 @@ public:
     return *this;
   }
 
-  constexpr PhysicalUnit const operator-() const {
-    return PhysicalUnit(-m_value);
-  }
+  constexpr PhysicalUnit operator-() const { return PhysicalUnit(-m_value); }
   constexpr ValType value() const { return m_value; }
 
 private:
   ValType m_value;
 };
 
+/* Dimensionless specialisation: implicitly convertible to the underlying type,
+   scaled by its conversion factor. It still exposes value()/ValueType/
+   ConvFactor so that the generic comparison and arithmetic operators below
+   work on dimensionless results just like on any other unit. */
 template <typename ValType, typename Factor>
 class PhysicalUnit<ValType, Factor, std::ratio<0>, std::ratio<0>, std::ratio<0>,
                    std::ratio<0>, std::ratio<0>, std::ratio<0>, std::ratio<0>,
                    std::ratio<0>> {
 public:
+  using ValueType = ValType;
+  using ConvFactor = Factor;
   constexpr explicit PhysicalUnit(ValType initialValue)
       : m_value(initialValue) {}
   constexpr PhysicalUnit() : m_value(0) {}
+
+  /* converting constructor */
+  template <typename V, typename F>
+  constexpr explicit PhysicalUnit(
+      const PhysicalUnit<V, F, std::ratio<0>, std::ratio<0>, std::ratio<0>,
+                         std::ratio<0>, std::ratio<0>, std::ratio<0>,
+                         std::ratio<0>, std::ratio<0>> &val)
+      : m_value(static_cast<ValType>(
+            static_cast<detail::ArithResult<V, ValType>>(val.value()) *
+            std::ratio_divide<F, Factor>::num /
+            std::ratio_divide<F, Factor>::den)) {}
+
+  PhysicalUnit const &operator+=(const PhysicalUnit &rhs) {
+    m_value += rhs.value();
+    return *this;
+  }
+
+  PhysicalUnit const &operator-=(const PhysicalUnit &rhs) {
+    m_value -= rhs.value();
+    return *this;
+  }
+
+  PhysicalUnit const &operator*=(const ValType &rhs) {
+    m_value *= rhs;
+    return *this;
+  }
+
+  PhysicalUnit const &operator/=(const ValType &rhs) {
+    m_value /= rhs;
+    return *this;
+  }
+
+  constexpr PhysicalUnit operator-() const { return PhysicalUnit(-m_value); }
+
+  /* Raw stored value, consistent with the primary template. */
+  constexpr ValType value() const { return m_value; }
+
+  /* Implicit decay to the underlying type, scaled by the conversion factor. */
   constexpr operator ValType() const {
     return m_value * Factor::num / Factor::den;
   }
@@ -110,7 +164,6 @@ public:
 private:
   ValType m_value;
 };
-
 template <typename V1, typename V2, typename... Ts>
 inline constexpr bool operator==(const PhysicalUnit<V1, Ts...> &lhs,
                                  const PhysicalUnit<V2, Ts...> &rhs) {
@@ -250,15 +303,18 @@ public:
       : m_value(val.value()) {}
 
   template <typename V, typename F, typename D, typename O>
-  explicit AbsolutePhysicalUnit(
+  constexpr explicit AbsolutePhysicalUnit(
       const AbsolutePhysicalUnit<V, F, D, O, LenDim, MassDim, TimeDim, ElcurDim,
-                                 TempDim, AmmDim, LumDim> &val) {
-    using outRatio = std::ratio_divide<F, Factor>;
-    using outOffset = std::ratio_divide<std::ratio_subtract<O, Offset>, Factor>;
-    using tmpType = decltype(val.value() * m_value);
-    m_value = tmpType(val.value()) * outRatio::num / outRatio::den +
-              tmpType(outOffset::num) / outOffset::den;
-  }
+                                 TempDim, AmmDim, LumDim> &val)
+      : m_value(static_cast<ValType>(
+            static_cast<detail::ArithResult<V, ValType>>(val.value()) *
+                std::ratio_divide<F, Factor>::num /
+                std::ratio_divide<F, Factor>::den +
+            static_cast<detail::ArithResult<V, ValType>>(
+                std::ratio_divide<std::ratio_subtract<O, Offset>,
+                                  Factor>::num) /
+                std::ratio_divide<std::ratio_subtract<O, Offset>,
+                                  Factor>::den)) {}
 
   template <typename V>
   AbsolutePhysicalUnit const &
@@ -302,9 +358,6 @@ public:
   }
 
   constexpr ValType value() const { return m_value; }
-
-protected:
-  virtual void setValue(const ValType &val) { m_value = val; }
 
 private:
   ValType m_value;
@@ -353,28 +406,43 @@ inline constexpr bool operator>(const AbsolutePhysicalUnit<Ts...> &lhs,
 
 template <typename... Ts>
 constexpr AbsolutePhysicalUnit<Ts...>
-operator+(const typename AbsolutePhysicalUnit<Ts...>::DiffUnitType &lhs,
+operator+(const typename AbsolutePhysicalUnit<Ts...>::DiffPhysicalUnit &lhs,
           const AbsolutePhysicalUnit<Ts...> &rhs) {
   return AbsolutePhysicalUnit<Ts...>(lhs.value() + rhs.value());
 }
 
-}; // namespace units
+/* Mathematical helpers.
+   These used to be injected into namespace std, which is undefined behaviour
+   and is rejected outright by clang. They now live in namespace units and are
+   found through argument-dependent lookup, so
+       using std::abs; abs(length);
+   resolves to units::abs for unit types and to std::abs for built-ins. */
 
-namespace std {
+/* fmod for integral types, so that the angle normalisation below can stay
+   integral (and constexpr) rather than detouring through a floating point. */
 template <typename A>
-typename std::enable_if<std::is_integral<A>::value, A>::type fmod(A a, A b) {
+constexpr typename std::enable_if<std::is_integral<A>::value, A>::type
+fmod(A a, A b) {
   return a % b;
 }
 
-template <typename V, typename... Args>
-units::PhysicalUnit<V, Args...>
-abs(const units::PhysicalUnit<V, Args...> &val) {
-  return units::PhysicalUnit<V, Args...>(abs(val.value()));
+template <typename A>
+inline typename std::enable_if<std::is_floating_point<A>::value, A>::type
+fmod(A a, A b) {
+  return std::fmod(a, b);
 }
 
 template <typename V, typename... Args>
-units::AbsolutePhysicalUnit<V, Args...>
-abs(const units::AbsolutePhysicalUnit<V, Args...> &val) {
-  return units::AbsolutePhysicalUnit<V, Args...>(abs(val.value()));
+inline PhysicalUnit<V, Args...> abs(const PhysicalUnit<V, Args...> &val) {
+  using std::abs;
+  return PhysicalUnit<V, Args...>(abs(val.value()));
 }
-}; // namespace std
+
+template <typename V, typename... Args>
+inline AbsolutePhysicalUnit<V, Args...>
+abs(const AbsolutePhysicalUnit<V, Args...> &val) {
+  using std::abs;
+  return AbsolutePhysicalUnit<V, Args...>(abs(val.value()));
+}
+
+} // namespace units
