@@ -57,11 +57,48 @@ the assumed SI unit is the degree. Radians and full circle measurements are also
 conversion factor mechanism.
 
 The library also provides the overrides for all basic trigonometry functions.
+They live in `namespace units` and are reached through argument-dependent
+lookup; see the section on namespaces below.
 
 AbsoluteAngle class offers a functionality similar to the AbsolutePhysicalUnit, but specific to the angles:
 - AbsoluteAngle can only have values within the given interval
 - As with the AbsolutePhysicalUnit, AbsoluteAngle supports addition and subtraction, but not multiplication
 and division
+
+## Namespaces and lookup
+
+Every helper the library provides lives in `namespace units`. Earlier versions
+defined some of them inside `namespace std` instead - the trigonometry
+wrappers, `abs`, `fmod`, `sqrt`, `cbrt`, `to_string` and the `std::chrono`
+converters. Adding overloads to `namespace std` for the library's own types is
+undefined behaviour, and clang rejects it outright, which is why the library
+used to fail to build with clang on every C++ standard.
+
+Functions that take a unit as an argument are found through argument-dependent
+lookup, so a `using` declaration is all that is needed:
+
+```C++
+using std::sin;
+using std::sqrt;
+
+double s = sin(AngleInDegrees(30));  // finds units::sin
+auto side = sqrt(area);              // finds units::sqrt
+auto positive = units::abs(-length);
+```
+
+Functions that only take the target type as an explicit template argument have
+nothing to deduce a namespace from, so they must be qualified:
+
+```C++
+auto direction = units::asin<Direction>(0.5);
+auto bearing = units::atan2<Direction>(1., 1.);
+std::string text = units::to_string(length);
+auto duration = units::duration_cast(interval);
+auto interval = units::unit_cast(duration);
+```
+
+If you are upgrading from an earlier version, replacing `std::` with `units::`
+at these call sites is the whole migration.
 
 ## Install
 
@@ -73,7 +110,7 @@ Install library using `setup.sh` script.
 `./setup.sh install`
 
 #### Uninstall with default path
-`./setup/sh uninstall`
+`./setup.sh uninstall`
 
 #### Build and install with custom path
 `./setup.sh path=/custom_path install`
@@ -114,7 +151,7 @@ or
 
 | Compiler | C++11 | C++14 | C++17 | C++20 | C++23 |
 |----------|-------|-------|-------|-------|-------|
-| g++      | ❌    | ✅    | ✅    | ✅    | ✅    |
-| clang++  | ❌    | ❌    | ❌    | ❌    | ❌    |
+| g++      | ✅    | ✅    | ✅    | ✅    | ✅    |
+| clang++  | ✅    | ✅    | ✅    | ✅    | ✅    |
 
 <!-- compiler-matrix-end -->

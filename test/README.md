@@ -153,6 +153,11 @@ The implementation of the root functions is more interesting and must be elabora
 
 My solution is rather lazy, but effective - I have introduced a template structure that calculates the root (square or cubic) of a number in the compile time, but only for the commonly used values. **Note**: if your code needs some atypical value to be rooted, you can easily provide a template specialisation for that number.
 
+Only perfect squares and perfect cubes can appear in these tables, since the
+result has to stay an integer for `std::ratio`. Each entry static asserts that
+it really is the root of its own key, and asking for a value that is not
+tabulated gives a clear compile time error rather than a silently wrong factor.
+
 Some example code for the template square structure:
 ```C++
 template <intmax_t Number> struct num_sqrt {};
@@ -169,7 +174,7 @@ template <> struct num_sqrt<100> {
   static const intmax_t value = 10;
 };
 
-template <> struct num_sqrt<360> {
+template <> struct num_sqrt<3600> {
   static const intmax_t value = 60;
 };
 ```
@@ -200,4 +205,26 @@ I ended up creating some helper macros for the two (or three) types of functions
 - functions that expect radians (e.g. `sin`) are overloaded to convert any angle type to the radian variant and then call the library function
 - functions that return radians (e.g. `asin`) are overloaded to accept a target angle type and convert the radians to the expected type
 - the faux third type is only for the `atan2` function, as it takes two arguments instead of one, but it otherwise behaves like other inverse functions from the previous point
+
+These overloads live in `namespace units`, not in `namespace std`. Adding
+overloads to `namespace std` for the library's own types is undefined behaviour
+and clang rejects it outright, which is why earlier versions of the library did
+not compile with clang at all.
+
+The forward functions take an angle argument, so argument-dependent lookup
+finds them without any qualification:
+```C++
+using std::sin;   // so that built-in types keep working too
+double s = sin(AngleInDegrees(30));
+```
+The inverse functions take the target angle type as an explicit template
+argument, so there is no argument to deduce a namespace from and they have to
+be called qualified:
+```C++
+auto direction = units::asin<Direction>(0.5);
+auto bearing = units::atan2<Direction>(1., 1.);
+```
+The same applies to `units::abs`, `units::sqrt`, `units::cbrt`,
+`units::to_string`, `units::fmod` and the `std::chrono` converters
+`units::duration_cast` and `units::unit_cast`.
 
