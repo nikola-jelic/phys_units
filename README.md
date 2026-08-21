@@ -65,6 +65,59 @@ AbsoluteAngle class offers a functionality similar to the AbsolutePhysicalUnit, 
 - As with the AbsolutePhysicalUnit, AbsoluteAngle supports addition and subtraction, but not multiplication
 and division
 
+## Pretty printing
+
+`phys_string.hpp` renders units for humans. It is a hosted diagnostic aid
+rather than part of the embedded core: it allocates `std::string` and pulls in
+`<sstream>`, which nothing else in the library does.
+
+```C++
+units::to_string(Acceleration(9.81));   // "9.81 m/s^2"
+units::to_string(Speed(3.5));           // "3.5 m/s"
+units::to_string(Hertz(50.));           // "50 1/s"
+units::to_string(CentiMeter(400));      // "400 cm"
+```
+
+Negative exponents are rendered as a denominator instead of trailing `^-n`, and
+a denominator holding more than one unit is bracketed, so that `m/(s A)` cannot
+be misread as `(m/s) A`.
+
+Precision and style are optional arguments:
+
+```C++
+units::to_string(Acceleration(9.81), 1);                      // "9.8 m/s^2"
+units::to_string(Acceleration(9.81), -1, units::UnitStyle::Utf8);  // "9.81 m/s²"
+```
+
+A precision of -1, the default, gives the shortest useful form rather than the
+six decimals `std::to_string` is fixed at.
+
+The symbol depends only on the type, so it can be asked for without a value, for
+a column heading or an axis label:
+
+```C++
+units::unit_symbol<Speed>();                        // "m/s"
+units::unit_symbol<Acceleration>(units::UnitStyle::Utf8);  // "m/s²"
+```
+
+Two extension points name derived units. `DimSymbol` names a dimension list and
+still composes with SI prefixes, so one specialisation covers both volts and
+millivolts:
+
+```C++
+template <>
+struct units::DimSymbol<std::ratio<2>, std::ratio<1>, std::ratio<-3>,
+                        std::ratio<-1>, std::ratio<0>, std::ratio<0>,
+                        std::ratio<0>, std::ratio<0>> {
+  static std::string get(units::UnitStyle) { return "V"; }
+};
+```
+
+`UnitSymbol` names a whole unit type, factor included, for units whose scale is
+part of their name and which therefore cannot be spelled as a prefix plus a
+dimension list, such as km/h. Without such a specialisation an unrecognised
+factor is rendered explicitly, as `100 (5/18) m/s`.
+
 ## Namespaces and lookup
 
 Every helper the library provides lives in `namespace units`. Earlier versions
