@@ -139,3 +139,59 @@ TEST(CommonAngleTests, AngleNormalisationNegativeHalfIntervalFloat) {
   shared = units::AbsoluteAngle<double>(-270);
   EXPECT_EQ(shared.value(), 90);
 }
+
+using Direction = units::AbsoluteAngle<int, std::ratio<1>>;
+using HalfDirection = units::AbsoluteAngle<int, std::ratio<1>, true>;
+using HalfDirectionFloat = units::AbsoluteAngle<double, std::ratio<1>, true>;
+
+/* AbsoluteAngle's own arithmetic operators referenced the member function
+   `value` instead of calling it, so none of them had ever compiled. */
+TEST(CommonAngleTests, AbsoluteAngleArithmetics) {
+  Direction d(350);
+  EXPECT_EQ((d + Direction::DiffAngleUnit(20)).value(), 10);
+  EXPECT_EQ((d - Direction::DiffAngleUnit(20)).value(), 330);
+  Direction low(10);
+  EXPECT_EQ((low - Direction::DiffAngleUnit(20)).value(), 350);
+
+  /* The difference between two directions is an angle, so it keeps its sign
+     and is not folded back into the circle. */
+  EXPECT_EQ((d - low).value(), 340);
+  EXPECT_EQ((low - d).value(), -340);
+}
+
+TEST(CommonAngleTests, AbsoluteAngleCompoundAssignment) {
+  Direction d(350);
+  d += Direction::DiffAngleUnit(20);
+  EXPECT_EQ(d.value(), 10);
+  d -= Direction::DiffAngleUnit(20);
+  EXPECT_EQ(d.value(), 350);
+}
+
+/* Half interval normalisation only folded values at or above +circle/2; those
+   below -circle/2 were left outside the documented range. */
+TEST(CommonAngleTests, HalfIntervalNormalisesBelowLowerBound) {
+  EXPECT_EQ(HalfDirection(-200).value(), 160);
+  EXPECT_EQ(HalfDirection(-190).value(), 170);
+  EXPECT_EQ(HalfDirection(-180).value(), -180);
+  EXPECT_EQ(HalfDirection(179).value(), 179);
+  EXPECT_EQ(HalfDirection(180).value(), -180);
+  EXPECT_EQ(HalfDirectionFloat(-200.).value(), 160.);
+}
+
+/* Trigonometry now resolves through ADL in namespace units rather than
+   through overloads injected into namespace std. */
+TEST(CommonAngleTests, Trigonometry) {
+  using std::cos;
+  using std::sin;
+  EXPECT_NEAR(sin(AngleInDegrees(30)), 0.5, 0.000001);
+  EXPECT_NEAR(cos(AngleInDegrees(60)), 0.5, 0.000001);
+  EXPECT_NEAR(sin(units::AbsoluteAngle<double>(30.)), 0.5, 0.000001);
+}
+
+TEST(CommonAngleTests, InverseTrigonometry) {
+  using Radians = units::AbsoluteAngle<double, std::ratio<1>>;
+  EXPECT_NEAR(units::asin<Radians>(0.5).value(), 30., 0.000001);
+  EXPECT_NEAR(units::acos<Radians>(0.5).value(), 60., 0.000001);
+  EXPECT_NEAR(units::atan2<Radians>(1., 1.).value(), 45., 0.000001);
+  EXPECT_NEAR(units::atan<AngleInRadians>(1.).value(), 0.785398, 0.000001);
+}

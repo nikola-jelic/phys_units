@@ -19,6 +19,8 @@ enable_testing()
 add_executable(
   phys_unit_test
   basic_test.cpp
+  string_test.cpp
+  string_odr_test.cpp
   angle_test.cpp
   chrono_test.cpp
   math_test.cpp

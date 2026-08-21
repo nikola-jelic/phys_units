@@ -55,9 +55,9 @@ TEST(PhysUnitsTests, ComplexConversions) {
 
 TEST(PhysUnitsTests, SupportFunctions) {
   Meter meters(-14);
-  EXPECT_EQ(std::abs(meters).value(), 14);
-  EXPECT_EQ(std::fmod(14, 4), 2);
-  static_assert(std::is_same<decltype(std::fmod(14, 4)), int>::value,
+  EXPECT_EQ(units::abs(meters).value(), 14);
+  EXPECT_EQ(units::fmod(14, 4), 2);
+  static_assert(std::is_same<decltype(units::fmod(14, 4)), int>::value,
                 "Type must be an integer");
 }
 
@@ -136,4 +136,26 @@ TEST(ComplexTests, SimpleArithmetics) {
   EXPECT_NEAR(electricity.value().imag(), 1.25, 0.00001);
   EXPECT_NEAR(std::abs(electricity.value()), 1.25, 0.00001);
   EXPECT_NEAR(std::arg(electricity.value()), M_PI / 2, 0.00001);
+}
+
+/* The dimensionless specialisation carried neither value() nor the ValueType
+   and ConvFactor aliases, so the generic operators could not instantiate
+   against it and two dimensionless results could not be compared. */
+using Scalar = units::PhysicalUnit<int, std::ratio<1>>;
+
+TEST(PhysUnitsTests, DimensionlessResults) {
+  Meter a(6), b(3);
+  auto ratio = a / b;
+  static_assert(std::is_same<decltype(ratio)::ValueType, int>::value,
+                "Dimensionless results must expose ValueType");
+
+  EXPECT_EQ(ratio.value(), 2);
+  EXPECT_TRUE(ratio == Scalar(2));
+  EXPECT_TRUE(ratio != Scalar(3));
+  EXPECT_TRUE(ratio > Scalar(1));
+  EXPECT_TRUE(ratio <= Scalar(2));
+
+  /* The documented implicit decay to the underlying type still works. */
+  int plain = ratio;
+  EXPECT_EQ(plain, 2);
 }
