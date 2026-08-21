@@ -33,7 +33,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
    This header is a hosted diagnostic aid, not part of the embedded core: it
    allocates std::string and pulls in <sstream>. The rest of the library is
    allocation free and resolves everything at compile time; nothing here does.
-   Do not include it on a target where that matters. */
+   Do not include it on a target where that matters.
+
+   Extend it in place. The header is small and meant to be vendored, so adding
+   a rendering style is an enum value plus a branch in exponent_string, and
+   naming a derived unit is a DimSymbol or UnitSymbol specialisation. There is
+   no plugin machinery to learn. */
 
 namespace units {
 
@@ -145,6 +150,7 @@ inline std::string superscript(const std::string &digits) {
    A fractional exponent is spelled out as ^n/d in the plain Utf8 style, since
    a raised fraction needs a font that positions U+2044 well and degrades badly
    where it does not. Utf8Fractions opts into it: m¹⁄². */
+/* Extension point: a new UnitStyle gets its branch here. */
 inline std::string exponent_string(intmax_t num, intmax_t den,
                                    UnitStyle style) {
   const std::string numerator = std::to_string(num);
