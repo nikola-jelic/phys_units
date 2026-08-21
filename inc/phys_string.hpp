@@ -38,9 +38,24 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace units {
 
 enum class UnitStyle {
-  Ascii, /* m/s^2   */
-  Utf8   /* m/s²    */
+  Ascii,        /* m^2, m^1/2 */
+  Utf8,         /* m², m^1/2  */
+  Utf8Fractions /* m², m¹⁄²   */
 };
+
+/* Compile time default for every rendering call, so that a project which wants
+   superscripts throughout does not have to name the style at each call site:
+
+       -DUNITS_DEFAULT_STYLE=units::UnitStyle::Utf8Fractions
+
+   Define it consistently for every translation unit that includes this header.
+   Two translation units disagreeing about it is an ODR violation, in the same
+   way as disagreeing about NDEBUG. */
+#ifndef UNITS_DEFAULT_STYLE
+#define UNITS_DEFAULT_STYLE UnitStyle::Ascii
+#endif
+
+inline UnitStyle default_style() { return UNITS_DEFAULT_STYLE; }
 
 inline const char *si_unit_name(int index) {
   static const char *const names[] = {"m", "kg",  "s",  "A",
@@ -117,22 +132,33 @@ inline std::string superscript_digit(char c) {
   }
 }
 
+inline std::string superscript(const std::string &digits) {
+  std::string result;
+  for (std::string::size_type i = 0; i < digits.size(); ++i)
+    result += superscript_digit(digits[i]);
+  return result;
+}
+
 /* Exponents only ever reach this positive: a negative one has already been
-   moved into the denominator. Fractional exponents stay in the ^n/d form even
-   in the Utf8 style, since a superscript fraction is harder to read than the
-   plain one. */
+   moved into the denominator.
+
+   A fractional exponent is spelled out as ^n/d in the plain Utf8 style, since
+   a raised fraction needs a font that positions U+2044 well and degrades badly
+   where it does not. Utf8Fractions opts into it: m¹⁄². */
 inline std::string exponent_string(intmax_t num, intmax_t den,
                                    UnitStyle style) {
-  const std::string plain = std::to_string(num);
-  if (den != 1)
-    return "^" + plain + "/" + std::to_string(den);
-  if (style == UnitStyle::Ascii)
-    return "^" + plain;
+  const std::string numerator = std::to_string(num);
 
-  std::string result;
-  for (std::string::size_type i = 0; i < plain.size(); ++i)
-    result += superscript_digit(plain[i]);
-  return result;
+  if (den == 1) {
+    if (style == UnitStyle::Ascii)
+      return "^" + numerator;
+    return superscript(numerator);
+  }
+
+  const std::string denominator = std::to_string(den);
+  if (style == UnitStyle::Utf8Fractions)
+    return superscript(numerator) + "⁄" + superscript(denominator);
+  return "^" + numerator + "/" + denominator;
 }
 
 struct DimEntry {
@@ -268,14 +294,14 @@ struct UnitSymbol<AbsolutePhysicalUnit<V, Factor, DiffType, Offset, Dims...>> {
 /* The symbol depends only on the type, so it can be asked for without a value
    in hand, for a column heading or an axis label. */
 template <typename Unit>
-inline std::string unit_symbol(UnitStyle style = UnitStyle::Ascii) {
+inline std::string unit_symbol(UnitStyle style = default_style()) {
   return UnitSymbol<Unit>::get(style);
 }
 
 template <typename V, typename Factor, typename... Dims>
 inline std::string to_string(const PhysicalUnit<V, Factor, Dims...> &val,
                              int precision = -1,
-                             UnitStyle style = UnitStyle::Ascii) {
+                             UnitStyle style = default_style()) {
   const std::string symbol =
       unit_symbol<PhysicalUnit<V, Factor, Dims...>>(style);
   const std::string value = detail::value_string(val.value(), precision);
@@ -288,7 +314,7 @@ template <typename V, typename Factor, typename DiffType, typename Offset,
           typename... Dims>
 inline std::string
 to_string(const AbsolutePhysicalUnit<V, Factor, DiffType, Offset, Dims...> &val,
-          int precision = -1, UnitStyle style = UnitStyle::Ascii) {
+          int precision = -1, UnitStyle style = default_style()) {
   const std::string symbol =
       unit_symbol<AbsolutePhysicalUnit<V, Factor, DiffType, Offset, Dims...>>(
           style);

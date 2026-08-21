@@ -9,5 +9,6 @@
 using Kilometre = units::PhysicalUnit<int, std::kilo, std::ratio<1>>;
 
 TEST(StringTests, LinksFromASecondTranslationUnit) {
-  EXPECT_EQ(units::to_string(Kilometre(7)), "7 km");
+  EXPECT_EQ(units::to_string(Kilometre(7), -1, units::UnitStyle::Ascii),
+            "7 km");
 }

@@ -89,6 +89,29 @@ units::to_string(Acceleration(9.81), 1);                      // "9.8 m/s^2"
 units::to_string(Acceleration(9.81), -1, units::UnitStyle::Utf8);  // "9.81 m/s²"
 ```
 
+There are three styles:
+
+| Style | `m^2` | `m^1/2` |
+|-------|-------|---------|
+| `UnitStyle::Ascii` | `m^2` | `m^1/2` |
+| `UnitStyle::Utf8` | `m²` | `m^1/2` |
+| `UnitStyle::Utf8Fractions` | `m²` | `m¹⁄²` |
+
+`Utf8` leaves fractional exponents in the plain form, since a raised fraction
+needs a font that positions the fraction slash well. `Utf8Fractions` opts into
+them anyway.
+
+Rather than naming the style at every call site, set the default for a whole
+project at compile time:
+
+```
+-DUNITS_DEFAULT_STYLE=units::UnitStyle::Utf8Fractions
+```
+
+Define it consistently across every translation unit that includes the header;
+translation units disagreeing about it is an ODR violation, in the same way as
+disagreeing about `NDEBUG`.
+
 A precision of -1, the default, gives the shortest useful form rather than the
 six decimals `std::to_string` is fixed at.
 
