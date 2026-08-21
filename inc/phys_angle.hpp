@@ -166,10 +166,17 @@ inline constexpr bool operator>(const AbsoluteAngle<Ts...> &lhs,
   return lhs.value() > rhs.value();
 }
 
-template <typename V, typename... Args>
-inline AbsoluteAngle<V, Args...> abs(const AbsoluteAngle<V, Args...> &val) {
+/* HalfInterval is a non-type parameter, so it has to be spelled out: a
+   typename pack can never bind to it, and the earlier signature using one
+   could not be deduced against any AbsoluteAngle at all.
+
+   On a full interval this is a no-op, every direction there already being
+   non-negative; on a half interval it mirrors the direction about zero. */
+template <typename V, typename Factor, bool HalfInterval>
+inline AbsoluteAngle<V, Factor, HalfInterval>
+abs(const AbsoluteAngle<V, Factor, HalfInterval> &val) {
   using std::abs;
-  return AbsoluteAngle<V, Args...>(abs(val.value()));
+  return AbsoluteAngle<V, Factor, HalfInterval>(abs(val.value()));
 }
 
 /* Trigonometry.

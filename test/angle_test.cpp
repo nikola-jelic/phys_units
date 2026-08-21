@@ -195,3 +195,28 @@ TEST(CommonAngleTests, InverseTrigonometry) {
   EXPECT_NEAR(units::atan2<Radians>(1., 1.).value(), 45., 0.000001);
   EXPECT_NEAR(units::atan<AngleInRadians>(1.).value(), 0.785398, 0.000001);
 }
+
+/* abs() on an AbsoluteAngle could never be deduced: HalfInterval is a non-type
+   parameter and the signature used a typename pack, which cannot bind to it. */
+TEST(CommonAngleTests, AbsoluteValue) {
+  EXPECT_NEAR(units::abs(units::AbsoluteAngle<double>(30.)).value(), 30.,
+              0.000001);
+  HalfDirectionFloat mirrored(-90.);
+  EXPECT_NEAR(units::abs(mirrored).value(), 90., 0.000001);
+}
+
+TEST(CommonAngleTests, HyperbolicTrigonometry) {
+  using std::sinh;
+  using std::tanh;
+  /* 0 degrees is 0 radians, so the hyperbolic functions are at their origin. */
+  EXPECT_NEAR(sinh(AngleInDegrees(0)), 0., 0.000001);
+  EXPECT_NEAR(tanh(units::AbsoluteAngle<double>(0.)), 0., 0.000001);
+  EXPECT_NEAR(units::cosh(AngleInDegrees(0)), 1., 0.000001);
+}
+
+TEST(CommonAngleTests, InverseHyperbolicTrigonometry) {
+  using Radians = units::AbsoluteAngle<double, std::ratio<1>>;
+  EXPECT_NEAR(units::asinh<Radians>(0.).value(), 0., 0.000001);
+  EXPECT_NEAR(units::atanh<Radians>(0.).value(), 0., 0.000001);
+  EXPECT_NEAR(units::acosh<Radians>(1.).value(), 0., 0.000001);
+}

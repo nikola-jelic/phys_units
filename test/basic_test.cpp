@@ -159,3 +159,56 @@ TEST(PhysUnitsTests, DimensionlessResults) {
   int plain = ratio;
   EXPECT_EQ(plain, 2);
 }
+
+/* Paths that no test instantiated. An uninstantiated template is unparsed
+   rather than merely untested, and coverage tools cannot see it at all, which
+   is how several broken operators survived here for years. */
+TEST(PhysUnitsTests, IncrementAndCompoundAssignment) {
+  Meter m(3);
+  ++m;
+  EXPECT_EQ(m.value(), 4);
+  --m;
+  EXPECT_EQ(m.value(), 3);
+  m *= 4;
+  EXPECT_EQ(m.value(), 12);
+  m /= 3;
+  EXPECT_EQ(m.value(), 4);
+}
+
+TEST(PhysUnitsTests, IntegralModulo) {
+  Meter a(7), b(4);
+  EXPECT_EQ(a % b, 3);
+}
+
+TEST(PhysUnitsTests, ScalarOnTheLeft) {
+  Meter m(3);
+  EXPECT_EQ((2 * m).value(), 6);
+  EXPECT_EQ((m * 2).value(), 6);
+
+  /* Dividing a scalar by a unit inverts its dimensions. */
+  Seconds s(2);
+  auto hz = 1 / s;
+  static_assert(std::is_same<decltype(hz), Herz::ValueType>::value == false,
+                "Dividing a scalar by a unit yields a unit, not a scalar");
+  EXPECT_EQ(hz.value(), 0);
+}
+
+TEST(AbsPhysUnitsTests, IncrementAndReversedAddition) {
+  TimeStampSeconds ts(5000);
+  ++ts;
+  EXPECT_EQ(ts.value(), 5001);
+  --ts;
+  EXPECT_EQ(ts.value(), 5000);
+
+  /* The free operator+ with the interval on the left. Its first parameter is
+     a non-deduced context, so the type comes from the absolute unit. */
+  Seconds interval(144);
+  TimeStampSeconds moved = interval + ts;
+  EXPECT_EQ(moved.value(), 5144);
+}
+
+TEST(AbsPhysUnitsTests, AbsoluteValue) {
+  TimeStampSeconds ts(-5);
+  EXPECT_EQ(units::abs(ts).value(), 5);
+  EXPECT_EQ(units::abs(Meter(-14)).value(), 14);
+}

@@ -17,8 +17,14 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v4
 
+    # Pinned exactly. The style itself lives in .clang-format, but LLVM style
+    # shifts slightly between clang-format releases, so an unpinned runner
+    # version would fail the job on drift rather than on a real violation.
+    - name: Install clang-format
+      run: pipx install clang-format==19.1.7
+
     - name: Check formatting
-      run: clang-format -n --Werror inc/*.hpp test/*.cpp
+      run: clang-format -n --Werror inc/*.hpp test/*.cpp test/compiler_tests/test_program.cpp
 
   unit-tests:
     runs-on: ubuntu-latest

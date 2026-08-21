@@ -158,3 +158,29 @@ TEST(StringTests, Dimensionless) { EXPECT_EQ(ascii(Scalar(42)), "42"); }
 TEST(StringTests, AbsoluteUnit) {
   EXPECT_EQ(ascii(TimeStampSeconds(4856)), "4856 s");
 }
+
+using OddScalar = units::PhysicalUnit<int, std::ratio<3, 7>>;
+using AbsoluteScalar =
+    units::AbsolutePhysicalUnit<int, std::ratio<1>, int, std::ratio<0>>;
+using BigExponent =
+    units::PhysicalUnit<double, std::ratio<1>, std::ratio<106789>>;
+
+/* A dimensionless value with a factor that is not an SI prefix: the factor is
+   still bracketed, but with no unit to follow it the trailing separator has to
+   be trimmed. */
+TEST(StringTests, DimensionlessWithUnrecognisedFactor) {
+  EXPECT_EQ(ascii(OddScalar(2)), "2 (3/7)");
+}
+
+/* A dimensionless absolute unit carries no symbol either. */
+TEST(StringTests, DimensionlessAbsoluteUnit) {
+  EXPECT_EQ(ascii(AbsoluteScalar(7)), "7");
+}
+
+/* Exercises every superscript digit rather than just the handful that show up
+   in realistic exponents. */
+TEST(StringTests, AllSuperscriptDigits) {
+  EXPECT_EQ(units::unit_symbol<BigExponent>(units::UnitStyle::Utf8), "m¹⁰⁶⁷⁸⁹");
+  EXPECT_EQ(units::unit_symbol<BigExponent>(units::UnitStyle::Ascii),
+            "m^106789");
+}
