@@ -28,6 +28,21 @@ jobs:
 
   unit-tests:
     runs-on: ubuntu-latest
+    strategy:
+      # Report every combination. Cancelling the rest on the first failure
+      # would hide whether a break is specific to one compiler or standard,
+      # which is usually the most informative thing about it.
+      fail-fast: false
+      matrix:
+        # The compile matrix only proves the headers compile. Running the suite
+        # under both compilers is what proves they behave the same, and clang
+        # is the one that used to be broken outright.
+        compiler: [g++, clang++]
+        # C++11 is absent because googletest 1.14 needs C++14; the compile probe
+        # covers C++11. C++20 earns its place here by rewriting comparison
+        # operators, which this library hand-writes.
+        standard: [14, 17, 20, 23]
+    name: unit-tests (${{ matrix.compiler }}, C++${{ matrix.standard }})
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
@@ -35,13 +50,16 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y g++ cmake
+        sudo apt-get install -y g++ clang cmake
 
     - name: Configure
-      run: cmake -S test -B build/test
+      run: |
+        cmake -S test -B build/test \
+          -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} \
+          -DCMAKE_CXX_STANDARD=${{ matrix.standard }}
 
     - name: Build
-      run: cmake --build build/test
+      run: cmake --build build/test -j
 
     # ctest surfaces the individual cases, and a failure here fails the job.
     - name: Run tests
