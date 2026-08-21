@@ -29,6 +29,32 @@ template <typename V, typename F>
 using PhysTime =
     units::PhysicalUnit<V, F, std::ratio<0>, std::ratio<0>, std::ratio<1>>;
 
+/* Explicit instantiation compiles every non-template member of these class
+   templates, whether or not anything below calls them. Ordinary use only
+   compiles the members it happens to touch, which is how AbsoluteAngle's
+   operator+ and operator- stayed broken for years while the test suite passed:
+   an uninstantiated member is unparsed, and no coverage tool can see it.
+
+   It does not reach member templates such as the converting constructors, nor
+   free function templates; main() below exercises those. */
+template class units::PhysicalUnit<int, std::ratio<1>, std::ratio<1>>;
+template class units::PhysicalUnit<double, std::centi, std::ratio<1>>;
+template class units::PhysicalUnit<int, std::ratio<1>>;
+/* PhysicalUnitAngle is an alias template, so its underlying class has to be
+   named in full here. */
+template class units::PhysicalUnit<
+    int, std::ratio<1>, std::ratio<0>, std::ratio<0>, std::ratio<0>,
+    std::ratio<0>, std::ratio<0>, std::ratio<0>, std::ratio<0>, std::ratio<1>>;
+template class units::AbsoluteAngle<double, std::ratio<1>>;
+template class units::AbsoluteAngle<int, std::ratio<1>,
+                                    units::AngleRange::Signed>;
+template class units::AbsolutePhysicalUnit<int, std::ratio<1>, int,
+                                           std::ratio<0>, std::ratio<0>,
+                                           std::ratio<0>, std::ratio<1>>;
+template class units::AbsolutePhysicalUnit<
+    double, std::ratio<5, 9>, double, std::ratio<229835, 900>, std::ratio<0>,
+    std::ratio<0>, std::ratio<0>, std::ratio<0>, std::ratio<1>>;
+
 int main(void) {
   AngleInDegrees angle(60);
   AngleInMinutes angle_minutes(angle);
