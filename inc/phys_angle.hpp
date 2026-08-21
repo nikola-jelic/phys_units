@@ -123,9 +123,16 @@ private:
         static_cast<ValType>(FullCircle<Factor>::num) / FullCircle<Factor>::den;
     const ValType result = units::fmod(value, circle);
     if (Range == AngleRange::Signed) {
-      if (result >= circle / 2)
+      /* The upper bound is the complement of the lower one rather than
+         circle / 2 again. With an odd circle, as an encoder with an odd count
+         per revolution gives, integer division truncates and the two guards
+         would overlap by one value, so normalising twice would not agree with
+         normalising once: 2047 became -2048 became 2047. Both bounds are
+         unchanged for an even circle and for a floating point one. */
+      const ValType half = circle / 2;
+      if (result >= circle - half)
         return static_cast<ValType>(result - circle);
-      if (result < -(circle / 2))
+      if (result < -half)
         return static_cast<ValType>(result + circle);
       return result;
     }

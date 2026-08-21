@@ -226,3 +226,49 @@ TEST(CommonAngleTests, InverseHyperbolicTrigonometry) {
   EXPECT_NEAR(units::atanh<Radians>(0.).value(), 0., 0.000001);
   EXPECT_NEAR(units::acosh<Radians>(1.).value(), 0., 0.000001);
 }
+
+/* Encoder counts. One count is 360/N degrees, which makes the full circle come
+   out as exactly N, so a direction normalises straight onto the raw count range
+   and wraparound is a single integer modulo, with no floating point involved.
+ */
+template <int N>
+using EncoderCount = units::AbsoluteAngle<int, std::ratio<360, N>>;
+template <int N>
+using SignedEncoderCount =
+    units::AbsoluteAngle<int, std::ratio<360, N>, units::AngleRange::Signed>;
+
+TEST(EncoderAngleTests, FullCircleIsExactlyTheCountPerRevolution) {
+  static_assert(units::FullCircle<std::ratio<360, 4096>>::num == 4096, "4096");
+  static_assert(units::FullCircle<std::ratio<360, 4096>>::den == 1, "exact");
+  static_assert(units::FullCircle<std::ratio<360, 999>>::num == 999, "999");
+  static_assert(units::FullCircle<std::ratio<360, 999>>::den == 1, "exact");
+
+  EXPECT_EQ(EncoderCount<4096>(4100).value(), 4);
+  EXPECT_EQ(EncoderCount<4096>(-5).value(), 4091);
+  EXPECT_EQ(EncoderCount<4096>(4096).value(), 0);
+}
+
+/* With an odd count per revolution, circle/2 truncates. The two guards used to
+   overlap by one value, so normalising twice disagreed with normalising once
+   and adding a zero interval moved the direction. */
+TEST(EncoderAngleTests, OddCountNormalisationIsStable) {
+  for (int v = -3 * 4095; v <= 3 * 4095; ++v) {
+    const int once = SignedEncoderCount<4095>(v).value();
+    EXPECT_EQ(SignedEncoderCount<4095>(once).value(), once)
+        << "normalising twice disagreed for " << v;
+    EXPECT_GE(once, -2047);
+    EXPECT_LE(once, 2047);
+
+    SignedEncoderCount<4095> moved(v);
+    moved += SignedEncoderCount<4095>::DiffAngleUnit(0);
+    EXPECT_EQ(moved.value(), once) << "adding zero moved " << v;
+  }
+}
+
+/* The even case, which was already correct, keeps its half-open interval. */
+TEST(EncoderAngleTests, EvenCountKeepsHalfOpenInterval) {
+  EXPECT_EQ(SignedEncoderCount<4096>(2047).value(), 2047);
+  EXPECT_EQ(SignedEncoderCount<4096>(2048).value(), -2048);
+  EXPECT_EQ(SignedEncoderCount<4096>(-2048).value(), -2048);
+  EXPECT_EQ(HalfDirection(180).value(), -180);
+}
