@@ -33,3 +33,15 @@
 *.exe
 *.out
 *.app
+
+# Build directories
+build/
+test/compiler_tests/build/
+test/compiler_tests/logs/
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+Testing/

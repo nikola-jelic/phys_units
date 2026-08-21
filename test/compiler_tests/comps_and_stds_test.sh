@@ -1,48 +1,60 @@
 #!/bin/bash
 
-# Name of the script: compile_test.sh
+# Builds the compile probe against every compiler and C++ standard, renders the
+# result as a markdown matrix into README.md, and exits non-zero if any cell
+# that is expected to pass did not. That exit code is the point: without it a
+# broken toolchain leaves CI green.
 
 COMPILERS=("g++" "clang++")
 STANDARDS=("11" "14" "17" "20" "23")
 
+# Cells that must pass. A regression in any of these fails the run. To take a
+# cell out of the contract, remove it here and say why.
+REQUIRED=(
+    "g++_C++11" "g++_C++14" "g++_C++17" "g++_C++20" "g++_C++23"
+    "clang++_C++11" "clang++_C++14" "clang++_C++17" "clang++_C++20"
+    "clang++_C++23"
+)
+
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPILER_TESTS="${PROJECT_ROOT}/test/compiler_tests"
-TEMP_BUILD_DIR="${COMPILER_TESTS}/build"
+BUILD_ROOT="${COMPILER_TESTS}/build"
 LOG_DIR="${COMPILER_TESTS}/logs"
 
 declare -A RESULTS
 
-function print_matrix_header()
+function is_required()
 {
-    # Print column headers
+    local key="$1"
+    local req
+    for req in "${REQUIRED[@]}"; do
+        [[ "$req" == "$key" ]] && return 0
+    done
+    return 1
+}
+
+function print_matrix()
+{
     printf "| %-8s " "Compiler"
     for STD in "${STANDARDS[@]}"; do
         printf "| %-5s " "C++$STD"
     done
     echo "|"
 
-    # Print separator line
-    printf "|%s" "----------" # For "Compiler"
-    for STD in "${STANDARDS[@]}"; do
+    printf "|%s" "----------"
+    for _ in "${STANDARDS[@]}"; do
         printf "|%s" "-------"
     done
     echo "|"
-}
 
-function print_results()
-{
-    COL_WIDTH=6
+    local COL_WIDTH=6
     for COMPILER in "${COMPILERS[@]}"; do
         printf "| %-8s " "$COMPILER"
         for STD in "${STANDARDS[@]}"; do
-            KEY="${COMPILER}_C++${STD}"
-            RESULT="${RESULTS[$KEY]}"
-            if [[ "${RESULT}" == "PASS" ]]; then
-                SYMBOL="✅"
-            else
-                SYMBOL="❌"
-            fi
-            printf "| %-*s " ${COL_WIDTH} "${SYMBOL}"
+            local KEY="${COMPILER}_C++${STD}"
+            local SYMBOL="❌"
+            [[ "${RESULTS[$KEY]}" == "PASS" ]] && SYMBOL="✅"
+            printf "| %-*s " $COL_WIDTH "$SYMBOL"
         done
         echo "|"
     done
@@ -51,136 +63,134 @@ function print_results()
 function export_markdown()
 {
     local md_file="${PROJECT_ROOT}/README.md"
-    local temp_file="${md_file}.tmp"
     local start_marker="<!-- compiler-matrix-start -->"
     local end_marker="<!-- compiler-matrix-end -->"
+    local block_file
+    block_file="$(mktemp)"
 
     {
         echo "$start_marker"
         echo ""
-        printf "| %-8s " "Compiler"
-        for STD in "${STANDARDS[@]}"; do
-            printf "| %-5s " "C++$STD"
-        done
-        echo "|"
-
-        printf "|%s" "----------"
-        for _ in "${STANDARDS[@]}"; do
-            printf "|%s" "-------"
-        done
-        echo "|"
-
-        COL_WIDTH=6
-        for COMPILER in "${COMPILERS[@]}"; do
-            printf "| %-8s " "$COMPILER"
-            for STD in "${STANDARDS[@]}"; do
-                local KEY="${COMPILER}_C++${STD}"
-                local RESULT="${RESULTS[$KEY]}"
-                local SYMBOL="❌"
-                [[ "$RESULT" == "PASS" ]] && SYMBOL="✅"
-                printf "| %-*s " $COL_WIDTH "$SYMBOL"
-            done
-            echo "|"
-        done
+        print_matrix
         echo ""
         echo "$end_marker"
-    } > "$temp_file"
+    } > "$block_file"
 
-    # Replace the block in README.md
-    awk -v start="$start_marker" -v end="$end_marker" \
-        -v new="$(cat < "$temp_file" | sed 's/[/]/\\\//g')" \
-        'BEGIN{found=0}
-         {
-           if ($0 ~ start) {print new; found=1; skip=1; next}
-           if ($0 ~ end) {skip=0; next}
-           if (!skip) print
-         }' "${md_file}" > "${md_file}.new"
+    awk -v start="$start_marker" -v end="$end_marker" -v blockfile="$block_file" \
+        'BEGIN { skip = 0 }
+         $0 ~ start {
+             while ((getline line < blockfile) > 0) print line
+             close(blockfile)
+             skip = 1
+             next
+         }
+         $0 ~ end { skip = 0; next }
+         !skip { print }' "${md_file}" > "${md_file}.new"
 
     mv "${md_file}.new" "${md_file}"
-    rm -f "${temp_file}"
+    rm -f "$block_file"
     echo "README.md updated with compiler matrix"
 }
 
 function run_compilation_matrix()
 {
-    mkdir -p "${TEMP_BUILD_DIR}" "${LOG_DIR}"
+    mkdir -p "${LOG_DIR}"
 
-    # Loop through compilers and standards
     for COMPILER in "${COMPILERS[@]}"; do
+        if ! command -v "$COMPILER" > /dev/null 2>&1; then
+            echo "Skipping ${COMPILER}: not installed"
+            for STANDARD in "${STANDARDS[@]}"; do
+                RESULTS["${COMPILER}_C++${STANDARD}"]="FAIL"
+            done
+            continue
+        fi
+
         for STANDARD in "${STANDARDS[@]}"; do
             echo "Compiling with $COMPILER and C++ standard $STANDARD..."
 
-            # Set environment variable
-            export CXX_COMPILER=$COMPILER
-            export CXX_STANDARD=$STANDARD
+            # A fresh directory per cell. Reusing one made CMake reject the
+            # second compiler outright, because a cached CMAKE_CXX_COMPILER
+            # cannot be changed in place.
+            local BUILD_DIR="${BUILD_ROOT}/${COMPILER}_${STANDARD}"
+            rm -rf "$BUILD_DIR"
 
-            # Configure and build project
-            cd "$TEMP_BUILD_DIR" || {
-                echo "Failed to navigate to build directory"
-                exit 1
-            }
-            cmake -D CMAKE_CXX_STANDARD="${CXX_STANDARD}" -D CMAKE_CXX_COMPILER="${CXX_COMPILER}" ..
+            local KEY="${COMPILER}_C++${STANDARD}"
+            local LOG_FILE="${LOG_DIR}/${KEY}.log"
 
-            BUILD_OUTPUT=$(cmake --build . --target test_program 2>&1)
-            BUILD_EXIT_CODE=$?
-
-            KEY="${COMPILER}_C++${STANDARD}"
-            LOG_FILE="${LOG_DIR}/${KEY}.log"
-            echo "$BUILD_OUTPUT" > "$LOG_FILE"
-
-            if [ $BUILD_EXIT_CODE -ne 0 ]; then
-                RESULTS["$KEY"]="FAIL"
-            else
+            if cmake -S "${COMPILER_TESTS}" -B "${BUILD_DIR}" \
+                    -DCMAKE_CXX_COMPILER="${COMPILER}" \
+                    -DCMAKE_CXX_STANDARD="${STANDARD}" > "$LOG_FILE" 2>&1 &&
+               cmake --build "${BUILD_DIR}" --target test_program >> "$LOG_FILE" 2>&1
+            then
                 RESULTS["$KEY"]="PASS"
+            else
+                RESULTS["$KEY"]="FAIL"
             fi
 
-            # Clean up build artifacts and leave temporary build folder
-            rm -f test_program
-            cd "$COMPILER_TESTS" || exit 1
+            rm -rf "$BUILD_DIR"
         done
     done
 
-    # Clean up the build directory
-    rm -rf "${TEMP_BUILD_DIR}"
+    rm -rf "${BUILD_ROOT}"
 }
 
-print_failed_logs()
+function print_failed_logs()
 {
-    echo ""
-    echo "=== 🔍 Failed Build Logs ==="
-
+    local any=1
     for COMPILER in "${COMPILERS[@]}"; do
         for STD in "${STANDARDS[@]}"; do
-            KEY="${COMPILER}_C++${STD}"
-            RESULT="${RESULTS[$KEY]}"
-
-            if [[ "$RESULT" == "FAIL" ]]; then
-                LOG_FILE="${LOG_DIR}/${KEY}.log"
+            local KEY="${COMPILER}_C++${STD}"
+            if [[ "${RESULTS[$KEY]}" == "FAIL" ]]; then
+                if [[ $any -eq 1 ]]; then
+                    echo ""
+                    echo "=== 🔍 Failed Build Logs ==="
+                    any=0
+                fi
                 echo ""
                 echo "----- 💥 Log: $KEY -----"
-                cat "$LOG_FILE"
+                cat "${LOG_DIR}/${KEY}.log"
             fi
         done
     done
+}
+
+function report_required_failures()
+{
+    local failures=0
+    for COMPILER in "${COMPILERS[@]}"; do
+        for STD in "${STANDARDS[@]}"; do
+            local KEY="${COMPILER}_C++${STD}"
+            if is_required "$KEY" && [[ "${RESULTS[$KEY]}" != "PASS" ]]; then
+                echo "Required configuration failed: ${KEY}"
+                failures=$((failures + 1))
+            fi
+        done
+    done
+
+    if [[ $failures -gt 0 ]]; then
+        echo ""
+        echo "${failures} required configuration(s) failed."
+        return 1
+    fi
+
+    echo ""
+    echo "All required configurations passed."
+    return 0
 }
 
 function main()
 {
-    cd "$PROJECT_ROOT" || {
-        echo "Failed to navigate to project root"
-        exit 1
-    }
-
     cd "$COMPILER_TESTS" || {
         echo "Failed to navigate to compiler_tests folder"
         exit 1
     }
 
     run_compilation_matrix
-    print_matrix_header
-    print_results
+    echo ""
+    print_matrix
     export_markdown
     print_failed_logs
+    report_required_failures
 }
 
 main "$@"

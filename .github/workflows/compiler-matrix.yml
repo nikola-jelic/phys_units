@@ -7,11 +7,21 @@ on:
   pull_request:
     branches: [master]
 
+permissions:
+  contents: read
+
 jobs:
-  compile:
-
+  format:
     runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
+    - name: Check formatting
+      run: clang-format -n --Werror inc/*.hpp test/*.cpp
+
+  unit-tests:
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
@@ -19,14 +29,52 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc g++ clang cmake
+        sudo apt-get install -y g++ cmake
+
+    - name: Configure
+      run: cmake -S test -B build/test
+
+    - name: Build
+      run: cmake --build build/test
+
+    # ctest surfaces the individual cases, and a failure here fails the job.
+    - name: Run tests
+      run: ctest --test-dir build/test --output-on-failure
+
+  compile-matrix:
+    runs-on: ubuntu-latest
+    # Needed by the README commit step below; every other job stays read only.
+    permissions:
+      contents: write
+    # The script exits non-zero when a required compiler/standard combination
+    # fails, so a broken toolchain now fails the job instead of quietly
+    # rendering a red cross into the README.
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y g++ clang cmake
 
     - name: Run Compile Test Script
       run: |
-          chmod +x ./test/compiler_tests/comps_and_stds_test.sh
-          ./test/compiler_tests/comps_and_stds_test.sh
+        chmod +x ./test/compiler_tests/comps_and_stds_test.sh
+        ./test/compiler_tests/comps_and_stds_test.sh
 
+    - name: Upload build logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: compiler-matrix-logs
+        path: test/compiler_tests/logs/
+        if-no-files-found: ignore
+
+    # Only on a direct push to master. Committing from a pull request build
+    # would push another contributor's in-progress state onto master.
     - name: Commit and push updated README.md
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -34,9 +82,7 @@ jobs:
         if [[ -n $(git status --porcelain README.md) ]]; then
           git add README.md
           git commit -m "📊 Update compiler matrix in README.md"
-          git push
+          git push origin HEAD:master
         else
           echo "No changes to README.md, skipping commit."
         fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
