@@ -23,6 +23,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "phys_units.hpp"
 #include <cmath>
+#include <ratio>
+#include <type_traits>
 
 namespace units {
 
@@ -37,6 +39,16 @@ using PhysicalUnitAngle =
                  std::ratio<0>, std::ratio<0>, std::ratio<0>, std::ratio<0>,
                  std::ratio<1>>;
 
+/* Degrees per radian, 180/pi = 57.29577951308232...
+   Kept at seven significant digits: enough to stay well inside double
+   precision for a single conversion, while small enough that std::ratio
+   arithmetic on it cannot overflow intmax_t. */
+using RadianRatio = std::ratio<5729578, 100000>;
+
+/* A full circle expressed in units of Factor. */
+template <typename Factor>
+using FullCircle = std::ratio_divide<std::ratio<360>, Factor>;
+
 template <typename ValType, typename Factor = std::ratio<1>,
           bool HalfInterval = false>
 class AbsoluteAngle {
@@ -45,64 +57,74 @@ public:
   using ValueType = ValType;
   using ConvFactor = Factor;
   using IntervalAlign = std::integral_constant<bool, HalfInterval>;
-  constexpr explicit AbsoluteAngle(ValType initialValue) {
-    setValue(initialValue);
-  }
+
   constexpr AbsoluteAngle() : m_value(0) {}
-  constexpr AbsoluteAngle(const AbsoluteAngle &val) { setValue(val.value()); }
+  explicit AbsoluteAngle(ValType initialValue)
+      : m_value(normalise(initialValue)) {}
+
+  /* The source is already normalised, so no renormalisation is needed and the
+     copy stays trivial. */
+  AbsoluteAngle(const AbsoluteAngle &) = default;
+  AbsoluteAngle &operator=(const AbsoluteAngle &) = default;
+
   template <typename V, typename F, bool H>
-  explicit AbsoluteAngle(const AbsoluteAngle<V, F, H> &val) {
-    using outRatio = std::ratio_divide<F, Factor>;
-    setValue(decltype(val.value() * m_value)(val.value()) * outRatio::num /
-             outRatio::den);
-  }
+  explicit AbsoluteAngle(const AbsoluteAngle<V, F, H> &val)
+      : m_value(normalise(static_cast<ValType>(
+            static_cast<detail::ArithResult<V, ValType>>(val.value()) *
+            std::ratio_divide<F, Factor>::num /
+            std::ratio_divide<F, Factor>::den))) {}
+
   template <typename V, bool H>
   AbsoluteAngle const &operator=(const AbsoluteAngle<V, Factor, H> &val) {
-    setValue(val.value());
+    m_value = normalise(static_cast<ValType>(val.value()));
     return *this;
   }
 
   AbsoluteAngle const &operator+=(const DiffAngleUnit &rhs) {
-    setValue(m_value + rhs.value());
+    m_value = normalise(m_value + rhs.value());
     return *this;
   }
 
   AbsoluteAngle const &operator-=(const DiffAngleUnit &rhs) {
-    setValue(m_value - rhs.value());
+    m_value = normalise(m_value - rhs.value());
     return *this;
   }
 
+  /* The difference between two directions is an angle, not a direction, so it
+     is returned unnormalised. */
   constexpr DiffAngleUnit operator-(const AbsoluteAngle &rhs) const {
-    return DiffAngleUnit(value - rhs.value());
+    return DiffAngleUnit(value() - rhs.value());
   }
 
-  constexpr AbsoluteAngle operator-(const DiffAngleUnit &rhs) const {
-    return AbsoluteAngle(value - rhs.value());
+  AbsoluteAngle operator-(const DiffAngleUnit &rhs) const {
+    return AbsoluteAngle(value() - rhs.value());
   }
 
-  constexpr AbsoluteAngle operator+(const DiffAngleUnit &rhs) const {
-    return AbsoluteAngle(value + rhs.value());
+  AbsoluteAngle operator+(const DiffAngleUnit &rhs) const {
+    return AbsoluteAngle(value() + rhs.value());
   }
 
   constexpr ValType value() const { return m_value; }
 
-protected:
-  virtual void setValue(const ValType &value) {
-    using fullCircle =
-        std::ratio_multiply<std::ratio<360>,
-                            std::ratio_divide<std::ratio<1>, Factor>>;
-    ValType factor = ValType(fullCircle::num) / fullCircle::den;
-    ValType result = std::fmod(value, factor);
-    if (HalfInterval && (result >= (factor / 2))) {
-      m_value = result - factor;
-    } else if (!HalfInterval && (result < 0)) {
-      m_value = result + factor;
-    } else {
-      m_value = result;
+private:
+  /* Folds an arbitrary value into either [0, circle) or [-circle/2, circle/2),
+     depending on HalfInterval. */
+  static ValType normalise(const ValType &value) {
+    const ValType circle =
+        static_cast<ValType>(FullCircle<Factor>::num) / FullCircle<Factor>::den;
+    const ValType result = units::fmod(value, circle);
+    if (HalfInterval) {
+      if (result >= circle / 2)
+        return static_cast<ValType>(result - circle);
+      if (result < -(circle / 2))
+        return static_cast<ValType>(result + circle);
+      return result;
     }
+    if (result < 0)
+      return static_cast<ValType>(result + circle);
+    return result;
   }
 
-private:
   ValType m_value;
 };
 
@@ -144,112 +166,111 @@ inline constexpr bool operator>(const AbsoluteAngle<Ts...> &lhs,
   return lhs.value() > rhs.value();
 }
 
-using RadianRatio = std::ratio<57296, 1000>;
-
-}; // namespace units
-
-namespace std {
 template <typename V, typename... Args>
-units::AbsoluteAngle<V, Args...>
-abs(const units::AbsoluteAngle<V, Args...> &val) {
-  return abs(val.value());
+inline AbsoluteAngle<V, Args...> abs(const AbsoluteAngle<V, Args...> &val) {
+  using std::abs;
+  return AbsoluteAngle<V, Args...>(abs(val.value()));
 }
 
-}; // namespace std
+/* Trigonometry.
+   These wrappers live in namespace units and are picked up by
+   argument-dependent lookup, so `using std::sin; sin(direction);` works. The
+   inverse functions take the target angle type as an explicit template
+   argument and therefore have to be called qualified, e.g.
+       auto d = units::asin<Direction>(0.5);
+   Defining them inside namespace std, as earlier versions did, is undefined
+   behaviour and is rejected by clang. */
 
-#define ABSOLUTE_UNIT_TRIGONOMETRY_WRAPPER(func)                               \
+#define UNITS_ABSOLUTE_ANGLE_TRIG(func)                                        \
   template <typename Val, typename Factor, bool H>                             \
-  typename units::ResultingType<Val>::type std::func(                          \
-      const units::AbsoluteAngle<Val, Factor, H> &val) {                       \
+  inline typename ResultingType<Val>::type func(                               \
+      const AbsoluteAngle<Val, Factor, H> &val) {                              \
     return std::func(                                                          \
-        units::AbsoluteAngle<typename units::ResultingType<Val>::type,         \
-                             units::RadianRatio, H>(val)                       \
+        AbsoluteAngle<typename ResultingType<Val>::type, RadianRatio, H>(val)  \
             .value());                                                         \
   }
 
-#define ABSOLUTE_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(func)                       \
+#define UNITS_ABSOLUTE_ANGLE_INVERSE_TRIG(func)                                \
   template <typename A, typename T>                                            \
-  typename std::enable_if<                                                     \
-      std::is_same<A, typename units::AbsoluteAngle<                           \
-                          typename A::ValueType, typename A::ConvFactor,       \
-                          A::IntevalAlign::value>>::value,                     \
+  inline typename std::enable_if<                                              \
+      std::is_same<                                                            \
+          A, AbsoluteAngle<typename A::ValueType, typename A::ConvFactor,      \
+                           A::IntervalAlign::value>>::value,                   \
       A>::type                                                                 \
-  std::func(T val) {                                                           \
-    return A(                                                                  \
-        units::AbsoluteAngle<T, units::RadianRatio, A::IntervalAlign::value>(  \
-            std::func(val)));                                                  \
+  func(T val) {                                                                \
+    return A(AbsoluteAngle<T, RadianRatio, A::IntervalAlign::value>(           \
+        std::func(val)));                                                      \
   }
 
-#define ABSOLUTE_UNIT_INVERSE_TRIGONOMETRY_WRAPPER2(func)                      \
+#define UNITS_ABSOLUTE_ANGLE_INVERSE_TRIG2(func)                               \
   template <typename A, typename T>                                            \
-  typename std::enable_if<                                                     \
-      std::is_same<A, typename units::AbsoluteAngle<                           \
-                          typename A::ValueType, typename A::ConvFactor,       \
-                          A::IntevalAlign::value>>::value,                     \
+  inline typename std::enable_if<                                              \
+      std::is_same<                                                            \
+          A, AbsoluteAngle<typename A::ValueType, typename A::ConvFactor,      \
+                           A::IntervalAlign::value>>::value,                   \
       A>::type                                                                 \
-  std::func(T val1, T val2) {                                                  \
-    return A(                                                                  \
-        units::AbsoluteAngle<T, units::RadianRatio, A::IntervalAlign::value>(  \
-            std::func(val1, val2)));                                           \
-  }
-
-ABSOLUTE_UNIT_TRIGONOMETRY_WRAPPER(sin)
-ABSOLUTE_UNIT_TRIGONOMETRY_WRAPPER(cos)
-ABSOLUTE_UNIT_TRIGONOMETRY_WRAPPER(tan)
-ABSOLUTE_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(asin)
-ABSOLUTE_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(acos)
-ABSOLUTE_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(atan)
-ABSOLUTE_UNIT_INVERSE_TRIGONOMETRY_WRAPPER2(atan2)
-
-ABSOLUTE_UNIT_TRIGONOMETRY_WRAPPER(sinh)
-ABSOLUTE_UNIT_TRIGONOMETRY_WRAPPER(cosh)
-ABSOLUTE_UNIT_TRIGONOMETRY_WRAPPER(tanh)
-ABSOLUTE_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(asinh)
-ABSOLUTE_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(acosh)
-ABSOLUTE_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(atanh)
-
-#define PHYSICAL_UNIT_TRIGONOMETRY_WRAPPER(func)                               \
-  template <typename Val, typename Factor>                                     \
-  typename units::ResultingType<Val>::type std::func(                          \
-      const units::PhysicalUnitAngle<Val, Factor> &val) {                      \
-    return std::func(                                                          \
-        units::PhysicalUnitAngle<typename units::ResultingType<Val>::type,     \
-                                 units::RadianRatio>(val)                      \
-            .value());                                                         \
-  }
-
-#define PHYSICAL_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(func)                       \
-  template <typename P, typename T>                                            \
-  typename std::enable_if<std::is_same<P, typename units::PhysicalUnitAngle<   \
-                                              typename P::ValueType,           \
-                                              typename P::ConvFactor>>::value, \
-                          P>::type                                             \
-  std::func(T val) {                                                           \
-    return P(units::PhysicalUnitAngle<T, units::RadianRatio>(std::func(val))); \
-  }
-
-#define PHYSICAL_UNIT_INVERSE_TRIGONOMETRY_WRAPPER2(func)                      \
-  template <typename P, typename T>                                            \
-  typename std::enable_if<std::is_same<P, typename units::PhysicalUnitAngle<   \
-                                              typename P::ValueType,           \
-                                              typename P::ConvFactor>>::value, \
-                          P>::type                                             \
-  std::func(T val1, T val2) {                                                  \
-    return P(units::PhysicalUnitAngle<T, units::RadianRatio>(                  \
+  func(T val1, T val2) {                                                       \
+    return A(AbsoluteAngle<T, RadianRatio, A::IntervalAlign::value>(           \
         std::func(val1, val2)));                                               \
   }
 
-PHYSICAL_UNIT_TRIGONOMETRY_WRAPPER(sin)
-PHYSICAL_UNIT_TRIGONOMETRY_WRAPPER(cos)
-PHYSICAL_UNIT_TRIGONOMETRY_WRAPPER(tan)
-PHYSICAL_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(asin)
-PHYSICAL_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(acos)
-PHYSICAL_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(atan)
-PHYSICAL_UNIT_INVERSE_TRIGONOMETRY_WRAPPER2(atan2)
+#define UNITS_PHYSICAL_ANGLE_TRIG(func)                                        \
+  template <typename Val, typename Factor>                                     \
+  inline typename ResultingType<Val>::type func(                               \
+      const PhysicalUnitAngle<Val, Factor> &val) {                             \
+    return std::func(                                                          \
+        PhysicalUnitAngle<typename ResultingType<Val>::type, RadianRatio>(val) \
+            .value());                                                         \
+  }
 
-PHYSICAL_UNIT_TRIGONOMETRY_WRAPPER(sinh)
-PHYSICAL_UNIT_TRIGONOMETRY_WRAPPER(cosh)
-PHYSICAL_UNIT_TRIGONOMETRY_WRAPPER(tanh)
-PHYSICAL_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(asinh)
-PHYSICAL_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(acosh)
-PHYSICAL_UNIT_INVERSE_TRIGONOMETRY_WRAPPER(atanh)
+#define UNITS_PHYSICAL_ANGLE_INVERSE_TRIG(func)                                \
+  template <typename P, typename T>                                            \
+  inline typename std::enable_if<                                              \
+      std::is_same<P, PhysicalUnitAngle<typename P::ValueType,                 \
+                                        typename P::ConvFactor>>::value,       \
+      P>::type                                                                 \
+  func(T val) {                                                                \
+    return P(PhysicalUnitAngle<T, RadianRatio>(std::func(val)));               \
+  }
+
+#define UNITS_PHYSICAL_ANGLE_INVERSE_TRIG2(func)                               \
+  template <typename P, typename T>                                            \
+  inline typename std::enable_if<                                              \
+      std::is_same<P, PhysicalUnitAngle<typename P::ValueType,                 \
+                                        typename P::ConvFactor>>::value,       \
+      P>::type                                                                 \
+  func(T val1, T val2) {                                                       \
+    return P(PhysicalUnitAngle<T, RadianRatio>(std::func(val1, val2)));        \
+  }
+
+UNITS_ABSOLUTE_ANGLE_TRIG(sin)
+UNITS_ABSOLUTE_ANGLE_TRIG(cos)
+UNITS_ABSOLUTE_ANGLE_TRIG(tan)
+UNITS_ABSOLUTE_ANGLE_TRIG(sinh)
+UNITS_ABSOLUTE_ANGLE_TRIG(cosh)
+UNITS_ABSOLUTE_ANGLE_TRIG(tanh)
+
+UNITS_PHYSICAL_ANGLE_TRIG(sin)
+UNITS_PHYSICAL_ANGLE_TRIG(cos)
+UNITS_PHYSICAL_ANGLE_TRIG(tan)
+UNITS_PHYSICAL_ANGLE_TRIG(sinh)
+UNITS_PHYSICAL_ANGLE_TRIG(cosh)
+UNITS_PHYSICAL_ANGLE_TRIG(tanh)
+
+UNITS_ABSOLUTE_ANGLE_INVERSE_TRIG(asin)
+UNITS_ABSOLUTE_ANGLE_INVERSE_TRIG(acos)
+UNITS_ABSOLUTE_ANGLE_INVERSE_TRIG(atan)
+UNITS_ABSOLUTE_ANGLE_INVERSE_TRIG(asinh)
+UNITS_ABSOLUTE_ANGLE_INVERSE_TRIG(acosh)
+UNITS_ABSOLUTE_ANGLE_INVERSE_TRIG(atanh)
+UNITS_ABSOLUTE_ANGLE_INVERSE_TRIG2(atan2)
+
+UNITS_PHYSICAL_ANGLE_INVERSE_TRIG(asin)
+UNITS_PHYSICAL_ANGLE_INVERSE_TRIG(acos)
+UNITS_PHYSICAL_ANGLE_INVERSE_TRIG(atan)
+UNITS_PHYSICAL_ANGLE_INVERSE_TRIG(asinh)
+UNITS_PHYSICAL_ANGLE_INVERSE_TRIG(acosh)
+UNITS_PHYSICAL_ANGLE_INVERSE_TRIG(atanh)
+UNITS_PHYSICAL_ANGLE_INVERSE_TRIG2(atan2)
+
+} // namespace units

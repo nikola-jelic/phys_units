@@ -23,24 +23,30 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "phys_units.hpp"
 #include <chrono>
-
-namespace std::chrono {
-
-template <typename Rep, typename Period>
-constexpr std::chrono::duration<Rep, Period>
-duration_cast(const units::PhysicalUnit<Rep, Period, std::ratio<0>,
-                                        std::ratio<0>, std::ratio<1>> &val) {
-  return std::chrono::duration<Rep, Period>(val.value());
-}
-}; // namespace std::chrono
+#include <ratio>
 
 namespace units {
 
+/* Converters between a PhysicalUnit time interval and std::chrono::duration.
+   The unit's conversion factor and the duration's period are both ratios
+   relative to the SI second, so they map onto each other directly.
+
+   These used to be defined inside namespace std::chrono, which is undefined
+   behaviour, and the nested namespace definition also required C++17. Both
+   problems go away by keeping them in namespace units. */
+
+template <typename Rep, typename Period>
+constexpr std::chrono::duration<Rep, Period>
+duration_cast(const PhysicalUnit<Rep, Period, std::ratio<0>, std::ratio<0>,
+                                 std::ratio<1>> &val) {
+  return std::chrono::duration<Rep, Period>(val.value());
+}
+
 template <typename V, typename F>
-PhysicalUnit<V, F, std::ratio<0>, std::ratio<0>, std::ratio<1>>
+constexpr PhysicalUnit<V, F, std::ratio<0>, std::ratio<0>, std::ratio<1>>
 unit_cast(const std::chrono::duration<V, F> &val) {
   return PhysicalUnit<V, F, std::ratio<0>, std::ratio<0>, std::ratio<1>>(
       val.count());
 }
 
-}; // namespace units
+} // namespace units

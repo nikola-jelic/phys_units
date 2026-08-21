@@ -22,86 +22,100 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #pragma once
 
 #include "phys_units.hpp"
+#include <cmath>
+#include <cstdint>
+#include <ratio>
 
-namespace std {
-template <intmax_t Number> struct num_sqrt {};
+namespace units {
 
-template <> struct num_sqrt<0> {
-  static const intmax_t value = 0;
+namespace detail {
+template <intmax_t N> struct DependentFalse : std::false_type {};
+} // namespace detail
+
+/* Compile time integer roots.
+   std::ratio is a type, so its numerator and denominator cannot be run through
+   a runtime root function; instead the roots of the values actually used as
+   conversion factors are tabulated here. If your code needs a factor that is
+   not listed, add a specialisation for it. */
+template <intmax_t Number> struct num_sqrt {
+  static_assert(detail::DependentFalse<Number>::value,
+                "units::num_sqrt is not specialised for this value; add a "
+                "specialisation for the conversion factor you need.");
 };
 
-template <> struct num_sqrt<1> {
-  static const intmax_t value = 1;
-};
+/* Each entry asserts its own correctness, so a mistyped root cannot slip into
+   the table again. Note that 360 is deliberately absent: it is not a perfect
+   square, and the entry that used to claim num_sqrt<360> == 60 was really the
+   root of 3600. */
+#define UNITS_DEFINE_SQRT(Number, Root)                                        \
+  template <> struct num_sqrt<Number> {                                        \
+    static_assert(static_cast<intmax_t>(Root) * static_cast<intmax_t>(Root) == \
+                      static_cast<intmax_t>(Number),                           \
+                  "num_sqrt entry is not the square root of its key");         \
+    static const intmax_t value = Root;                                        \
+  };
 
-template <> struct num_sqrt<100> {
-  static const intmax_t value = 10;
-};
-
-template <> struct num_sqrt<360> {
-  static const intmax_t value = 60;
-};
-
-template <> struct num_sqrt<10000> {
-  static const intmax_t value = 100;
-};
-
-template <> struct num_sqrt<1000000> {
-  static const intmax_t value = 1000;
-};
-
-template <> struct num_sqrt<100000000> {
-  static const intmax_t value = 1000;
-};
+UNITS_DEFINE_SQRT(0, 0)
+UNITS_DEFINE_SQRT(1, 1)
+UNITS_DEFINE_SQRT(4, 2)
+UNITS_DEFINE_SQRT(9, 3)
+UNITS_DEFINE_SQRT(100, 10)
+UNITS_DEFINE_SQRT(3600, 60)
+UNITS_DEFINE_SQRT(10000, 100)
+UNITS_DEFINE_SQRT(1000000, 1000)
+UNITS_DEFINE_SQRT(100000000, 10000)
+UNITS_DEFINE_SQRT(10000000000, 100000)
+UNITS_DEFINE_SQRT(1000000000000, 1000000)
 
 template <typename R>
-using ratio_sqrt = ratio<num_sqrt<R::num>::value, num_sqrt<R::den>::value>;
+using ratio_sqrt = std::ratio<num_sqrt<R::num>::value, num_sqrt<R::den>::value>;
 
-template <typename V, typename F, typename... Dims>
-auto sqrt(const units::PhysicalUnit<V, F, Dims...> &val)
-    -> units::PhysicalUnit<decltype(sqrt(val.value())), ratio_sqrt<F>,
-                           ratio_divide<Dims, ratio<2>>...> {
-  return units::PhysicalUnit<decltype(sqrt(val.value())), ratio_sqrt<F>,
-                             ratio_divide<Dims, ratio<2>>...>(
-      sqrt(val.value()));
-}
-
-template <intmax_t Number> struct num_cbrt {};
-
-template <> struct num_cbrt<0> {
-  static const intmax_t value = 0;
+template <intmax_t Number> struct num_cbrt {
+  static_assert(detail::DependentFalse<Number>::value,
+                "units::num_cbrt is not specialised for this value; add a "
+                "specialisation for the conversion factor you need.");
 };
 
-template <> struct num_cbrt<1> {
-  static const intmax_t value = 1;
-};
+#define UNITS_DEFINE_CBRT(Number, Root)                                        \
+  template <> struct num_cbrt<Number> {                                        \
+    static_assert(static_cast<intmax_t>(Root) * static_cast<intmax_t>(Root) *  \
+                          static_cast<intmax_t>(Root) ==                       \
+                      static_cast<intmax_t>(Number),                           \
+                  "num_cbrt entry is not the cube root of its key");           \
+    static const intmax_t value = Root;                                        \
+  };
 
-template <> struct num_cbrt<8> {
-  static const intmax_t value = 2;
-};
-
-template <> struct num_cbrt<27> {
-  static const intmax_t value = 3;
-};
-
-template <> struct num_cbrt<1000> {
-  static const intmax_t value = 10;
-};
-
-template <> struct num_cbrt<1000000> {
-  static const intmax_t value = 100;
-};
+UNITS_DEFINE_CBRT(0, 0)
+UNITS_DEFINE_CBRT(1, 1)
+UNITS_DEFINE_CBRT(8, 2)
+UNITS_DEFINE_CBRT(27, 3)
+UNITS_DEFINE_CBRT(1000, 10)
+UNITS_DEFINE_CBRT(1000000, 100)
+UNITS_DEFINE_CBRT(1000000000, 1000)
 
 template <typename R>
-using ratio_cbrt = ratio<num_cbrt<R::num>::value, num_cbrt<R::den>::value>;
+using ratio_cbrt = std::ratio<num_cbrt<R::num>::value, num_cbrt<R::den>::value>;
 
+/* Like abs(), these live in namespace units and are reached through ADL:
+       using std::sqrt; sqrt(area);
+   The dimensions are halved (or thirded) and the conversion factor is rooted
+   at compile time via the tables above. */
 template <typename V, typename F, typename... Dims>
-auto cbrt(const units::PhysicalUnit<V, F, Dims...> &val)
-    -> units::PhysicalUnit<decltype(cbrt(val.value())), ratio_cbrt<F>,
-                           ratio_divide<Dims, ratio<3>>...> {
-  return units::PhysicalUnit<decltype(cbrt(val.value())), ratio_cbrt<F>,
-                             ratio_divide<Dims, ratio<3>>...>(
-      cbrt(val.value()));
+inline auto sqrt(const PhysicalUnit<V, F, Dims...> &val)
+    -> PhysicalUnit<decltype(std::sqrt(val.value())), ratio_sqrt<F>,
+                    std::ratio_divide<Dims, std::ratio<2>>...> {
+  return PhysicalUnit<decltype(std::sqrt(val.value())), ratio_sqrt<F>,
+                      std::ratio_divide<Dims, std::ratio<2>>...>(
+      std::sqrt(val.value()));
 }
 
-}; // namespace std
+template <typename V, typename F, typename... Dims>
+inline auto cbrt(const PhysicalUnit<V, F, Dims...> &val)
+    -> PhysicalUnit<decltype(std::cbrt(val.value())), ratio_cbrt<F>,
+                    std::ratio_divide<Dims, std::ratio<3>>...> {
+  return PhysicalUnit<decltype(std::cbrt(val.value())), ratio_cbrt<F>,
+                      std::ratio_divide<Dims, std::ratio<3>>...>(
+      std::cbrt(val.value()));
+}
+
+} // namespace units
