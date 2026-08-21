@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Nikola Jelic <nikola.jelic83@gmail.com>
+Copyright 2024-2026 Nikola Jelić <nikola.jelic83@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the “Software”), to deal in
