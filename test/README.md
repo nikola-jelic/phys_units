@@ -197,6 +197,17 @@ There is one additional peculiarity for the absolute angles:
 - the value can be normalised to either [0, N) or to [-N/2, N/2)
 - the solution was to introduce a template argument which enforses the correct behaviour
 
+That argument is the `units::AngleRange` enumeration:
+```C++
+using Bearing = units::AbsoluteAngle<double, std::ratio<1>>;  // [0, 360)
+using Heading = units::AbsoluteAngle<double, std::ratio<1>,
+                                     units::AngleRange::Signed>;  // [-180, 180)
+```
+It was a `bool` at first, which could only ever encode those two choices. If
+your project needs another way of handling the circle boundary, add a value to
+the enumeration and a branch to `AbsoluteAngle::normalise`; the header is meant
+to be edited in place.
+
 ### Trigonometry
 
 All trigonometry functions provided by the standard library expect or provide values in radians, which posed a challenge to the library's design.

@@ -49,14 +49,24 @@ using RadianRatio = std::ratio<5729578, 100000>;
 template <typename Factor>
 using FullCircle = std::ratio_divide<std::ratio<360>, Factor>;
 
+/* Which interval a direction is folded into. A bool could encode only two
+   choices; an enum leaves room for the others that come up in practice.
+
+   Extend it in place: a new range is a value here plus a branch in
+   AbsoluteAngle::normalise. */
+enum class AngleRange {
+  Positive, /* [0, circle)           */
+  Signed    /* [-circle/2, circle/2) */
+};
+
 template <typename ValType, typename Factor = std::ratio<1>,
-          bool HalfInterval = false>
+          AngleRange Range = AngleRange::Positive>
 class AbsoluteAngle {
 public:
   using DiffAngleUnit = PhysicalUnitAngle<ValType, Factor>;
   using ValueType = ValType;
   using ConvFactor = Factor;
-  using IntervalAlign = std::integral_constant<bool, HalfInterval>;
+  using IntervalAlign = std::integral_constant<AngleRange, Range>;
 
   constexpr AbsoluteAngle() : m_value(0) {}
   explicit AbsoluteAngle(ValType initialValue)
@@ -67,15 +77,15 @@ public:
   AbsoluteAngle(const AbsoluteAngle &) = default;
   AbsoluteAngle &operator=(const AbsoluteAngle &) = default;
 
-  template <typename V, typename F, bool H>
-  explicit AbsoluteAngle(const AbsoluteAngle<V, F, H> &val)
+  template <typename V, typename F, AngleRange R>
+  explicit AbsoluteAngle(const AbsoluteAngle<V, F, R> &val)
       : m_value(normalise(static_cast<ValType>(
             static_cast<detail::ArithResult<V, ValType>>(val.value()) *
             std::ratio_divide<F, Factor>::num /
             std::ratio_divide<F, Factor>::den))) {}
 
-  template <typename V, bool H>
-  AbsoluteAngle const &operator=(const AbsoluteAngle<V, Factor, H> &val) {
+  template <typename V, AngleRange R>
+  AbsoluteAngle const &operator=(const AbsoluteAngle<V, Factor, R> &val) {
     m_value = normalise(static_cast<ValType>(val.value()));
     return *this;
   }
@@ -107,13 +117,12 @@ public:
   constexpr ValType value() const { return m_value; }
 
 private:
-  /* Folds an arbitrary value into either [0, circle) or [-circle/2, circle/2),
-     depending on HalfInterval. */
+  /* Folds an arbitrary value into the interval named by Range. */
   static ValType normalise(const ValType &value) {
     const ValType circle =
         static_cast<ValType>(FullCircle<Factor>::num) / FullCircle<Factor>::den;
     const ValType result = units::fmod(value, circle);
-    if (HalfInterval) {
+    if (Range == AngleRange::Signed) {
       if (result >= circle / 2)
         return static_cast<ValType>(result - circle);
       if (result < -(circle / 2))
@@ -166,17 +175,17 @@ inline constexpr bool operator>(const AbsoluteAngle<Ts...> &lhs,
   return lhs.value() > rhs.value();
 }
 
-/* HalfInterval is a non-type parameter, so it has to be spelled out: a
-   typename pack can never bind to it, and the earlier signature using one
-   could not be deduced against any AbsoluteAngle at all.
+/* Range is a non-type parameter, so it has to be spelled out: a typename pack
+   can never bind to one, and the earlier signature using one could not be
+   deduced against any AbsoluteAngle at all.
 
    On a full interval this is a no-op, every direction there already being
    non-negative; on a half interval it mirrors the direction about zero. */
-template <typename V, typename Factor, bool HalfInterval>
-inline AbsoluteAngle<V, Factor, HalfInterval>
-abs(const AbsoluteAngle<V, Factor, HalfInterval> &val) {
+template <typename V, typename Factor, AngleRange Range>
+inline AbsoluteAngle<V, Factor, Range>
+abs(const AbsoluteAngle<V, Factor, Range> &val) {
   using std::abs;
-  return AbsoluteAngle<V, Factor, HalfInterval>(abs(val.value()));
+  return AbsoluteAngle<V, Factor, Range>(abs(val.value()));
 }
 
 /* Trigonometry.
@@ -189,11 +198,11 @@ abs(const AbsoluteAngle<V, Factor, HalfInterval> &val) {
    behaviour and is rejected by clang. */
 
 #define UNITS_ABSOLUTE_ANGLE_TRIG(func)                                        \
-  template <typename Val, typename Factor, bool H>                             \
+  template <typename Val, typename Factor, AngleRange R>                       \
   inline typename ResultingType<Val>::type func(                               \
-      const AbsoluteAngle<Val, Factor, H> &val) {                              \
+      const AbsoluteAngle<Val, Factor, R> &val) {                              \
     return std::func(                                                          \
-        AbsoluteAngle<typename ResultingType<Val>::type, RadianRatio, H>(val)  \
+        AbsoluteAngle<typename ResultingType<Val>::type, RadianRatio, R>(val)  \
             .value());                                                         \
   }
 

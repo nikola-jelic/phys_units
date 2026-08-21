@@ -63,7 +63,8 @@ TEST(CommonAngleTests, AngleNormalisationNegativeFullInterval) {
 }
 
 TEST(CommonAngleTests, AngleNormalisationPositiveHalfInterval) {
-  units::AbsoluteAngle<int, std::ratio<1>, true> shared(45);
+  units::AbsoluteAngle<int, std::ratio<1>, units::AngleRange::Signed> shared(
+      45);
   EXPECT_EQ(shared.value(), 45);
   shared = units::AbsoluteAngle<int>(180);
   EXPECT_EQ(shared.value(), -180);
@@ -76,7 +77,8 @@ TEST(CommonAngleTests, AngleNormalisationPositiveHalfInterval) {
 }
 
 TEST(CommonAngleTests, AngleNormalisationNegativeHalfInterval) {
-  units::AbsoluteAngle<int, std::ratio<1>, true> shared(-30);
+  units::AbsoluteAngle<int, std::ratio<1>, units::AngleRange::Signed> shared(
+      -30);
   EXPECT_EQ(shared.value(), -30);
   shared = units::AbsoluteAngle<int>(180);
   EXPECT_EQ(shared.value(), -180);
@@ -115,7 +117,8 @@ TEST(CommonAngleTests, AngleNormalisationNegativeFullIntervalFloat) {
 }
 
 TEST(CommonAngleTests, AngleNormalisationPositiveHalfIntervalFloat) {
-  units::AbsoluteAngle<double, std::ratio<1>, true> shared(45);
+  units::AbsoluteAngle<double, std::ratio<1>, units::AngleRange::Signed> shared(
+      45);
   EXPECT_EQ(shared.value(), 45);
   shared = units::AbsoluteAngle<double>(180);
   EXPECT_EQ(shared.value(), -180);
@@ -128,7 +131,8 @@ TEST(CommonAngleTests, AngleNormalisationPositiveHalfIntervalFloat) {
 }
 
 TEST(CommonAngleTests, AngleNormalisationNegativeHalfIntervalFloat) {
-  units::AbsoluteAngle<double, std::ratio<1>, true> shared(-30);
+  units::AbsoluteAngle<double, std::ratio<1>, units::AngleRange::Signed> shared(
+      -30);
   EXPECT_EQ(shared.value(), -30);
   shared = units::AbsoluteAngle<double>(180);
   EXPECT_EQ(shared.value(), -180);
@@ -141,8 +145,10 @@ TEST(CommonAngleTests, AngleNormalisationNegativeHalfIntervalFloat) {
 }
 
 using Direction = units::AbsoluteAngle<int, std::ratio<1>>;
-using HalfDirection = units::AbsoluteAngle<int, std::ratio<1>, true>;
-using HalfDirectionFloat = units::AbsoluteAngle<double, std::ratio<1>, true>;
+using HalfDirection =
+    units::AbsoluteAngle<int, std::ratio<1>, units::AngleRange::Signed>;
+using HalfDirectionFloat =
+    units::AbsoluteAngle<double, std::ratio<1>, units::AngleRange::Signed>;
 
 /* AbsoluteAngle's own arithmetic operators referenced the member function
    `value` instead of calling it, so none of them had ever compiled. */
@@ -196,7 +202,7 @@ TEST(CommonAngleTests, InverseTrigonometry) {
   EXPECT_NEAR(units::atan<AngleInRadians>(1.).value(), 0.785398, 0.000001);
 }
 
-/* abs() on an AbsoluteAngle could never be deduced: HalfInterval is a non-type
+/* abs() on an AbsoluteAngle could never be deduced: the range is a non-type
    parameter and the signature used a typename pack, which cannot bind to it. */
 TEST(CommonAngleTests, AbsoluteValue) {
   EXPECT_NEAR(units::abs(units::AbsoluteAngle<double>(30.)).value(), 30.,
